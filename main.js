@@ -152,189 +152,129 @@ ipcMain.handle('get-tray-bounds', () => {
   return null;
 });
 
-// ── Tray Menu ───────────────────────────────────────────────────────
-function buildTrayMenu() {
-  const pauseLabel = settings.paused ? '▶️  Resume' : '⏸  Pause';
-  const volLabel = `🔊 Volume: ${Math.round(settings.volume * 100)}%`;
+// ── Tray Popup Window ────────────────────────────────────────────────
+let trayPopup = null;
 
-  return Menu.buildFromTemplate([
-    { label: '🍑 Whip Me Bad', enabled: false },
-    { type: 'separator' },
-    {
-      label: '📊 Insights',
-      click: () => showInsights(),
+function showTrayPopup() {
+  if (trayPopup) {
+    trayPopup.close();
+    trayPopup = null;
+    return;
+  }
+
+  const trayBounds = tray.getBounds();
+  const popupWidth = 280;
+  const popupHeight = 360;
+
+  // Position below tray icon (macOS) or above (Windows)
+  let x = Math.round(trayBounds.x + trayBounds.width / 2 - popupWidth / 2);
+  let y;
+  if (process.platform === 'darwin') {
+    y = trayBounds.y + trayBounds.height + 4;
+  } else {
+    y = trayBounds.y - popupHeight - 4;
+  }
+
+  trayPopup = new BrowserWindow({
+    x, y,
+    width: popupWidth,
+    height: popupHeight,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    show: false,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false,
     },
-    {
-      label: pauseLabel,
-      click: () => {
-        settings.paused = !settings.paused;
-        saveSettings();
-        updateTray();
-        console.log(settings.paused ? '⏸ Paused' : '▶️ Resumed');
-      },
-    },
-    { type: 'separator' },
-    {
-      label: `${volLabel}`,
-      enabled: false,
-    },
-    {
-      label: '   🔈 25%',
-      type: 'radio',
-      checked: settings.volume === 0.25,
-      click: () => { settings.volume = 0.25; saveSettings(); updateTray(); },
-    },
-    {
-      label: '   🔉 50%',
-      type: 'radio',
-      checked: settings.volume === 0.5,
-      click: () => { settings.volume = 0.5; saveSettings(); updateTray(); },
-    },
-    {
-      label: '   🔊 75%',
-      type: 'radio',
-      checked: settings.volume === 0.75,
-      click: () => { settings.volume = 0.75; saveSettings(); updateTray(); },
-    },
-    {
-      label: '   🔊 100%',
-      type: 'radio',
-      checked: settings.volume >= 0.85,
-      click: () => { settings.volume = 0.85; saveSettings(); updateTray(); },
-    },
-    { type: 'separator' },
-    {
-      label: settings.enterTrigger ? `⌨️  Trigger Key: ${settings.triggerKey}` : '⌨️  Trigger Key: Off',
-      submenu: [
-        {
-          label: 'Change Key...',
-          click: () => showKeyCapture(),
-        },
-        {
-          label: settings.enterTrigger ? 'Disable' : 'Enable',
-          click: () => {
-            settings.enterTrigger = !settings.enterTrigger;
-            saveSettings();
-            updateTray();
-          },
-        },
-      ],
-    },
-    { type: 'separator' },
-    {
-      label: `🔊 Whoosh: ${settings.customWhoosh ? path.basename(settings.customWhoosh) : 'Default'}`,
-      click: async () => {
-        const result = await dialog.showOpenDialog({
-          title: 'Choose whoosh sound',
-          filters: [{ name: 'Audio', extensions: ['mp3', 'wav', 'ogg', 'm4a'] }],
-          properties: ['openFile'],
-        });
-        if (!result.canceled && result.filePaths.length > 0) {
-          settings.customWhoosh = result.filePaths[0];
-          saveSettings();
-          updateTray();
-          sendSoundPaths();
-        }
-      },
-    },
-    {
-      label: `🔊 Slap: ${settings.customSlap ? path.basename(settings.customSlap) : 'Default'}`,
-      click: async () => {
-        const result = await dialog.showOpenDialog({
-          title: 'Choose slap sound',
-          filters: [{ name: 'Audio', extensions: ['mp3', 'wav', 'ogg', 'm4a'] }],
-          properties: ['openFile'],
-        });
-        if (!result.canceled && result.filePaths.length > 0) {
-          settings.customSlap = result.filePaths[0];
-          saveSettings();
-          updateTray();
-          sendSoundPaths();
-        }
-      },
-    },
-    {
-      label: '🔄 Reset Sounds to Default',
-      click: () => {
-        settings.customWhoosh = '';
-        settings.customSlap = '';
-        saveSettings();
-        updateTray();
-        sendSoundPaths();
-      },
-    },
-    { type: 'separator' },
-    {
-      label: '📁 Install Hooks in Project...',
-      click: async () => {
-        const result = await dialog.showOpenDialog({
-          title: 'Select a Kiro project folder',
-          properties: ['openDirectory'],
-          message: 'Pick a project folder to install Whip Me Bad hooks',
-        });
-        if (!result.canceled && result.filePaths.length > 0) {
-          const dir = result.filePaths[0];
-          try {
-            await installInDirectory(dir);
-            dialog.showMessageBox({
-              type: 'info',
-              title: 'Whip Me Bad',
-              message: '🍑 Hooks installed!',
-              detail: `Installed Kiro hooks in:\n${dir}`,
-            });
-          } catch (err) {
-            dialog.showMessageBox({
-              type: 'error',
-              title: 'Whip Me Bad',
-              message: 'Failed to install hooks',
-              detail: err.message,
-            });
-          }
-        }
-      },
-    },
-    {
-      label: `📂 Watch: ${settings.watchFolder || 'Not set'}`,
-      click: async () => {
-        const result = await dialog.showOpenDialog({
-          title: 'Select your dev folder to watch',
-          properties: ['openDirectory'],
-          defaultPath: settings.watchFolder,
-          message: 'New Kiro projects in this folder will get hooks automatically',
-        });
-        if (!result.canceled && result.filePaths.length > 0) {
-          settings.watchFolder = result.filePaths[0];
-          saveSettings();
-          updateTray();
-          // Restart watcher
-          startFSWatcher();
-        }
-      },
-    },
-    { type: 'separator' },
-    {
-      label: app.getLoginItemSettings().openAtLogin ? '✅ Launch at Login' : '⬜ Launch at Login',
-      click: () => {
-        const current = app.getLoginItemSettings().openAtLogin;
-        app.setLoginItemSettings({ openAtLogin: !current });
-        updateTray();
-      },
-    },
-    {
-      label: '🚪 Quit',
-      click: () => {
-        stopAutoInstaller();
-        stopAnalytics();
-        if (keyMonitor) keyMonitor.kill();
-        app.quit();
-      },
-    },
-  ]);
+  });
+
+  trayPopup.loadFile('src/tray-popup.html');
+
+  trayPopup.once('ready-to-show', () => {
+    trayPopup.show();
+    // Send current settings
+    trayPopup.webContents.send('init-settings', {
+      paused: settings.paused,
+      volume: settings.volume,
+      customWhoosh: settings.customWhoosh,
+      customSlap: settings.customSlap,
+      triggerKey: settings.triggerKey,
+      enterTrigger: settings.enterTrigger,
+    });
+  });
+
+  // Close when clicking outside
+  trayPopup.on('blur', () => {
+    if (trayPopup) { trayPopup.close(); trayPopup = null; }
+  });
+  trayPopup.on('closed', () => { trayPopup = null; });
 }
+
+// ── Tray popup IPC handlers ─────────────────────────────────────────
+ipcMain.on('toggle-pause', () => {
+  settings.paused = !settings.paused;
+  saveSettings();
+});
+
+ipcMain.on('set-volume-setting', (_, vol) => {
+  settings.volume = vol;
+  saveSettings();
+});
+
+ipcMain.on('change-whoosh', async () => {
+  const result = await dialog.showOpenDialog({
+    title: 'Choose whoosh sound',
+    filters: [{ name: 'Audio', extensions: ['mp3', 'wav', 'ogg', 'm4a'] }],
+    properties: ['openFile'],
+  });
+  if (!result.canceled && result.filePaths.length > 0) {
+    settings.customWhoosh = result.filePaths[0];
+    saveSettings();
+    sendSoundPaths();
+    if (trayPopup) trayPopup.webContents.send('init-settings', settings);
+  }
+});
+
+ipcMain.on('change-slap', async () => {
+  const result = await dialog.showOpenDialog({
+    title: 'Choose slap sound',
+    filters: [{ name: 'Audio', extensions: ['mp3', 'wav', 'ogg', 'm4a'] }],
+    properties: ['openFile'],
+  });
+  if (!result.canceled && result.filePaths.length > 0) {
+    settings.customSlap = result.filePaths[0];
+    saveSettings();
+    sendSoundPaths();
+    if (trayPopup) trayPopup.webContents.send('init-settings', settings);
+  }
+});
+
+ipcMain.on('change-key', () => {
+  showKeyCapture();
+});
+
+ipcMain.on('show-insights', () => {
+  showInsights();
+  if (trayPopup) { trayPopup.close(); trayPopup = null; }
+});
+
+ipcMain.on('open-login', () => {
+  const current = app.getLoginItemSettings().openAtLogin;
+  app.setLoginItemSettings({ openAtLogin: !current });
+});
+
+ipcMain.on('quit-app', () => {
+  stopAutoInstaller();
+  stopAnalytics();
+  if (keyMonitor) keyMonitor.kill();
+  app.quit();
+});
 
 function updateTray() {
   if (tray) {
-    tray.setContextMenu(buildTrayMenu());
     tray.setToolTip(settings.paused ? 'Whip Me Bad (Paused)' : 'Whip Me Bad 🍑');
   }
 }
@@ -346,7 +286,7 @@ function createTray() {
     icon.setTemplateImage(false);
     tray = new Tray(icon);
     tray.setToolTip('Whip Me Bad 🍑');
-    tray.setContextMenu(buildTrayMenu());
+    tray.on('click', () => showTrayPopup());
     console.log('🍑 Tray icon created');
   } catch (err) {
     console.error('❌ Tray creation failed:', err.message);

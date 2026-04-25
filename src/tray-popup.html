@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html>
+<head>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+
+  /* ══════════════════════════════════════════════
+     DESIGN SYSTEM — neutral base, clear hierarchy
+     ══════════════════════════════════════════════ */
+  :root {
+    /* Dark theme (default) */
+    --bg: #1a1a1e;
+    --bg-elevated: #222226;
+    --bg-hover: #2a2a2f;
+    --text-primary: #f0eeec;
+    --text-secondary: #9a9898;
+    --text-tertiary: #5e5d5c;
+    --accent: #e8734a;
+    --accent-soft: rgba(232,115,74,0.12);
+    --accent-hover: rgba(232,115,74,0.2);
+    --accent-text: #e8734a;
+    --border: rgba(255,255,255,0.07);
+    --slider-track: #333338;
+    --slider-thumb: #e8734a;
+    --danger: #d45555;
+    --shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #ffffff;
+      --bg-elevated: #f5f5f4;
+      --bg-hover: #ebebea;
+      --text-primary: #1a1a1a;
+      --text-secondary: #6b6b6b;
+      --text-tertiary: #9a9a9a;
+      --accent: #d4612e;
+      --accent-soft: rgba(212,97,46,0.08);
+      --accent-hover: rgba(212,97,46,0.14);
+      --accent-text: #c45520;
+      --border: rgba(0,0,0,0.08);
+      --slider-track: #e0dfde;
+      --slider-thumb: #d4612e;
+      --danger: #c44040;
+      --shadow: 0 8px 32px rgba(0,0,0,0.12);
+    }
+  }
+
+  html,body{
+    width:100%;height:100%;overflow:hidden;
+    background:var(--bg);
+    font-family:'Inter',-apple-system,sans-serif;color:var(--text-primary);
+    -webkit-font-smoothing:antialiased;
+    border-radius:12px;
+    border:1px solid var(--border);
+    box-shadow:var(--shadow);
+  }
+  body{padding:12px;display:flex;flex-direction:column;gap:8px}
+
+  /* ── Header ── */
+  .header{display:flex;align-items:center;justify-content:space-between;padding:4px 4px 2px}
+  .brand{display:flex;align-items:center;gap:8px}
+  .brand-icon{font-size:18px}
+  .brand-name{font-size:13px;font-weight:700;color:var(--text-primary)}
+  .toggle{
+    width:30px;height:30px;border-radius:8px;border:none;
+    background:var(--accent-soft);cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    transition:all .12s;
+  }
+  .toggle:hover{background:var(--accent-hover)}
+  .toggle.paused{background:var(--bg-elevated)}
+
+  /* ── Row group ── */
+  .group{background:var(--bg-elevated);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+  .group-label{font-size:10px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:.06em}
+
+  /* ── Volume ── */
+  .vol-row{display:flex;align-items:center;gap:8px}
+  .vol-slider{flex:1;-webkit-appearance:none;height:4px;border-radius:2px;
+    background:var(--slider-track);outline:none;cursor:pointer}
+  .vol-slider::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;
+    border-radius:50%;background:var(--slider-thumb);cursor:pointer;
+    box-shadow:0 1px 4px rgba(0,0,0,0.2)}
+  .vol-val{font-size:11px;font-weight:600;color:var(--text-secondary);width:30px;text-align:right;font-variant-numeric:tabular-nums}
+
+  /* ── Sound item ── */
+  .sound-item{display:flex;align-items:center;gap:8px}
+  .sound-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);flex-shrink:0}
+  .sound-name{font-size:12px;font-weight:500;color:var(--text-primary);flex-shrink:0}
+  .sound-file{font-size:10px;color:var(--text-tertiary);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .icon-btn{
+    width:24px;height:24px;border-radius:6px;border:none;
+    background:var(--accent-soft);cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    transition:all .12s;flex-shrink:0;
+    font-size:9px;color:var(--accent-text);
+  }
+  .icon-btn:hover{background:var(--accent-hover)}
+
+  /* ── Trigger ── */
+  .trigger-row{display:flex;align-items:center;gap:8px}
+  .key-pill{
+    font-size:11px;font-weight:700;color:var(--accent-text);
+    background:var(--accent-soft);padding:4px 12px;border-radius:6px;
+    font-family:'SF Mono','Fira Code','Menlo',monospace;
+    letter-spacing:.02em;
+  }
+  .trigger-label{flex:1;font-size:11px;color:var(--text-tertiary)}
+
+  /* ── Divider ── */
+  .divider{height:1px;background:var(--border);margin:2px 0}
+
+  /* ── Footer ── */
+  .footer{display:flex;align-items:center;justify-content:space-between;padding:2px 4px 0}
+  .foot-btn{
+    font-size:10px;font-weight:500;color:var(--text-tertiary);
+    background:none;border:none;cursor:pointer;padding:4px 6px;
+    border-radius:5px;transition:all .1s;
+    font-family:'Inter',sans-serif;
+    display:inline-flex;align-items:center;gap:4px;
+  }
+  .foot-btn:hover{color:var(--text-secondary);background:var(--bg-elevated)}
+  .foot-btn.danger:hover{color:var(--danger)}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="brand">
+    <span class="brand-icon">🍑</span>
+    <span class="brand-name">Whip Me Bad</span>
+  </div>
+  <button class="toggle" id="toggleBtn" onclick="togglePause()">
+    <svg id="pauseIcon" width="12" height="12" viewBox="0 0 24 24" fill="var(--accent)" stroke="none"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+    <svg id="playIcon" width="12" height="12" viewBox="0 0 24 24" fill="var(--text-tertiary)" stroke="none" style="display:none"><polygon points="6,3 20,12 6,21"/></svg>
+  </button>
+</div>
+
+<div class="group">
+  <div class="group-label">Volume</div>
+  <div class="vol-row">
+    <input type="range" class="vol-slider" id="volSlider" min="0" max="100" value="85" oninput="changeVolume(this.value)">
+    <span class="vol-val" id="volVal">85%</span>
+  </div>
+</div>
+
+<div class="group">
+  <div class="group-label">Sounds</div>
+  <div class="sound-item">
+    <span class="sound-dot"></span>
+    <span class="sound-name">Whoosh</span>
+    <span class="sound-file" id="whooshFile">Default</span>
+    <button class="icon-btn" onclick="previewSound('whoosh')" title="Preview">▶</button>
+    <button class="icon-btn" onclick="bridge.send('change-whoosh')" title="Change">✎</button>
+  </div>
+  <div class="sound-item">
+    <span class="sound-dot"></span>
+    <span class="sound-name">Slap</span>
+    <span class="sound-file" id="slapFile">Default</span>
+    <button class="icon-btn" onclick="previewSound('slap')" title="Preview">▶</button>
+    <button class="icon-btn" onclick="bridge.send('change-slap')" title="Change">✎</button>
+  </div>
+</div>
+
+<div class="group">
+  <div class="group-label">Trigger</div>
+  <div class="trigger-row">
+    <span class="key-pill" id="keyBadge">Enter</span>
+    <span class="trigger-label">Global hotkey</span>
+    <button class="icon-btn" onclick="bridge.send('change-key')" title="Change key">✎</button>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<div class="footer">
+  <button class="foot-btn" onclick="bridge.send('show-insights')">
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+    Insights
+  </button>
+  <button class="foot-btn" onclick="bridge.send('open-login')">
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+    Login
+  </button>
+  <button class="foot-btn danger" onclick="bridge.send('quit-app')">
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    Quit
+  </button>
+</div>
+
+<script>
+const { ipcRenderer } = require('electron');
+const bridge = { send: (ch) => ipcRenderer.send(ch) };
+
+let currentSettings = {};
+
+function truncate(str, max) {
+  if (!str) return 'Default';
+  const name = str.split('/').pop().split('\\').pop();
+  if (name.length <= max) return name;
+  const ext = name.includes('.') ? '.' + name.split('.').pop() : '';
+  return name.slice(0, max - ext.length - 1) + '…' + ext;
+}
+
+let previewAudio = null;
+function previewSound(type) {
+  if (previewAudio) { previewAudio.pause(); previewAudio = null; }
+  const src = type === 'whoosh'
+    ? (currentSettings.customWhoosh || '../assets/sounds/whoosh.mp3')
+    : (currentSettings.customSlap || '../assets/sounds/slap.mp3');
+  previewAudio = new Audio(src);
+  previewAudio.volume = currentSettings.volume || 0.85;
+  previewAudio.play().catch(() => {});
+}
+
+ipcRenderer.on('init-settings', (_, s) => {
+  currentSettings = s;
+  const btn = document.getElementById('toggleBtn');
+  const pauseIcon = document.getElementById('pauseIcon');
+  const playIcon = document.getElementById('playIcon');
+  if (s.paused) { btn.classList.add('paused'); pauseIcon.style.display='none'; playIcon.style.display=''; }
+  else { btn.classList.remove('paused'); pauseIcon.style.display=''; playIcon.style.display='none'; }
+  document.getElementById('volSlider').value = Math.round(s.volume * 100);
+  document.getElementById('volVal').textContent = Math.round(s.volume * 100) + '%';
+  document.getElementById('whooshFile').textContent = truncate(s.customWhoosh, 16);
+  document.getElementById('slapFile').textContent = truncate(s.customSlap, 16);
+  document.getElementById('keyBadge').textContent = s.triggerKey || 'Enter';
+});
+
+function togglePause() {
+  ipcRenderer.send('toggle-pause');
+  const btn = document.getElementById('toggleBtn');
+  const p = document.getElementById('pauseIcon');
+  const pl = document.getElementById('playIcon');
+  const isPaused = btn.classList.toggle('paused');
+  p.style.display = isPaused ? 'none' : '';
+  pl.style.display = isPaused ? '' : 'none';
+}
+
+function changeVolume(val) {
+  document.getElementById('volVal').textContent = val + '%';
+  currentSettings.volume = parseInt(val) / 100;
+  ipcRenderer.send('set-volume-setting', parseInt(val) / 100);
+}
+</script>
+</body>
+</html>
