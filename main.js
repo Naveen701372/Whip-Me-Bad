@@ -120,19 +120,23 @@ let enterTimer = null;
 
 function triggerFromEnter() {
   if (!settings.enterTrigger) return;
-  if (enterTimer) return;
+  // Always delay Enter — give hooks time to arrive and cancel
+  if (enterTimer) clearTimeout(enterTimer);
   enterTimer = setTimeout(() => {
     enterTimer = null;
-    triggerWhip();
+    triggerWhip('');
     track('enter');
-  }, 150);
+  }, 300);
 }
 
 function triggerFromHook(hookType, label) {
+  // Hook arrived — cancel any pending Enter trigger
   if (enterTimer) {
     clearTimeout(enterTimer);
     enterTimer = null;
   }
+  // Only fire if not in cooldown (prevents double from rapid hooks)
+  if (cooldown) return;
   triggerWhip(label);
   track(hookType || 'kiro_hook');
 }
