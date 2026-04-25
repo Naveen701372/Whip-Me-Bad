@@ -1,0 +1,14 @@
+{
+  "enabled": true,
+  "name": "Whip Me Bad — Agent Done",
+  "description": "Triggers a whip crack when Kiro's agent finishes its execution. Requires Whip Me Bad to be running.",
+  "version": "1",
+  "when": {
+    "type": "agentStop"
+  },
+  "then": {
+    "type": "runCommand",
+    "command": "curl -s http://127.0.0.1:31338/whip?type=kiro_agent_stop > /dev/null 2>&1 || true",
+    "timeout": 3
+  }
+}

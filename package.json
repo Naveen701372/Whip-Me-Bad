@@ -1,0 +1,76 @@
+{
+  "name": "whip-me-bad",
+  "version": "1.0.0",
+  "description": "Slap your AI into shipping faster 🍑",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "build": "electron-builder --mac",
+    "build:dmg": "electron-builder --mac dmg",
+    "build:zip": "electron-builder --mac zip",
+    "build:win": "electron-builder --win",
+    "build:all": "electron-builder --mac --win"
+  },
+  "build": {
+    "appId": "com.whipmebad.app",
+    "productName": "Whip Me Bad",
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "icon": "build/icon.icns",
+      "target": ["dmg", "zip"],
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "extendInfo": {
+        "LSUIElement": true
+      }
+    },
+    "dmg": {
+      "title": "Whip Me Bad",
+      "backgroundColor": "#0a0608",
+      "contents": [
+        { "x": 130, "y": 220 },
+        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+      ]
+    },
+    "win": {
+      "target": ["nsis"],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "overlay.html",
+      "onboarding.html",
+      "insights.html",
+      "hook-installer.js",
+      "analytics.js",
+      "trigger.js",
+      "tray-icon.png",
+      "slap.mp3",
+      "whoosh.mp3",
+      "hooks/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "hooks",
+        "to": "hooks"
+      }
+    ]
+  },
+  "dependencies": {
+    "electron": "^33.0.0"
+  },
+  "devDependencies": {
+    "electron-builder": "^25.1.8"
+  }
+}

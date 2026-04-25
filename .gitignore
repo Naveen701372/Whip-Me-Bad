@@ -1,0 +1,9 @@
+node_modules/
+dist/
+build/icon.icns
+build/icon.ico
+graphify-out/
+*.dmg
+*.exe
+*.AppImage
+.DS_Store

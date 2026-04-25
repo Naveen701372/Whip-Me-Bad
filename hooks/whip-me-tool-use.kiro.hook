@@ -1,0 +1,15 @@
+{
+  "enabled": true,
+  "name": "Whip Me Bad — Tool Use",
+  "description": "Triggers a whip crack after any tool execution — shell commands, MCP calls, reads, writes. Requires Whip Me Bad to be running.",
+  "version": "1",
+  "when": {
+    "type": "postToolUse",
+    "toolTypes": ["write", "shell"]
+  },
+  "then": {
+    "type": "runCommand",
+    "command": "curl -s http://127.0.0.1:31338/whip?type=kiro_tool > /dev/null 2>&1 || true",
+    "timeout": 3
+  }
+}

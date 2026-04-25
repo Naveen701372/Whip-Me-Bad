@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html>
+<head>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; }
+  html, body {
+    overflow: hidden;
+    background: transparent;
+    width: 100vw;
+    height: 100vh;
+    pointer-events: none;
+  }
+  canvas { display: block; }
+  #flash {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 10;
+    opacity: 0;
+    transition: opacity 0.12s ease-out;
+  }
+</style>
+</head>
+<body>
+<div id="flash"></div>
+<canvas id="c"></canvas>
+<script>
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const flashEl = document.getElementById('flash');
+let W, H;
+function resize() { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; }
+resize();
+window.addEventListener('resize', resize);
+
+// ═══════════════════════════════════════════════════════════════════════
+//  CONFIG
+// ═══════════════════════════════════════════════════════════════════════
+const P = {
+  segments: 34,
+  segmentLength: 20,
+  taper: 0.5,
+  gravity: 1.5,
+  damping: 0.96,
+  constraintIters: 20,
+  maxStretchRatio: 1.2,
+  handleMaxBendDeg: 14,
+  tipMaxBendDeg: 150,
+  bendRigidityStart: 0.85,
+  bendRigidityEnd: 0.06,
+  wallBounce: 0.3,
+  wallFriction: 0.8,
+  lineWidthHandle: 10,
+  lineWidthTip: 2.5,
+  outlineWidth: 4,
+  handleExtraWidth: 7,
+  handleThickSegments: 3,
+  dropGravity: 1.2,
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════════════════════
+let whip = null;
+let phase = 'idle';
+let animFrame = 0;
+let globalFrame = 0;
+let cracked = false;
+let particles = [];
+let sparks = [];
+let dreamMotes = [];
+let screenShake = { x: 0, y: 0 };
+let shakeIntensity = 0;
+let dropTimer = 0;
+let trailPoints = [];
+let handleX = 0, handleY = 0;
+let prevHandleX = 0, prevHandleY = 0;
+
+// ═══════════════════════════════════════════════════════════════════════
+//  AUDIO — preloaded with pooling to prevent memory leaks
+// ═══════════════════════════════════════════════════════════════════════
+const slapAudio = new Audio('slap.mp3');
+const whooshAudio = new Audio('whoosh.mp3');
+slapAudio.preload = 'auto';
+whooshAudio.preload = 'auto';
+slapAudio.load();
+whooshAudio.load();
+
+// Audio pool — reuse elements instead of cloneNode leak
+const POOL_SIZE = 4;
+const slapPool = [];
+const whooshPool = [];
+let slapIdx = 0, whooshIdx = 0;
+
+for (let i = 0; i < POOL_SIZE; i++) {
+  const s = new Audio('slap.mp3'); s.preload = 'auto'; s.load();
+  const w = new Audio('whoosh.mp3'); w.preload = 'auto'; w.load();
+  slapPool.push(s);
+  whooshPool.push(w);
+}
+
+function playWhooshSound() {
+  const a = whooshPool[whooshIdx % POOL_SIZE];
+  whooshIdx++;
+  a.volume = 0.15 * masterVolume;
+  a.currentTime = 0;
+  a.play().catch(() => {});
+}
+
+function playCrackSound() {
+  const a = slapPool[slapIdx % POOL_SIZE];
+  slapIdx++;
+  a.volume = masterVolume;
+  a.currentTime = 0;
+  a.play().catch(() => {});
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  WHIP PHYSICS
+// ═══════════════════════════════════════════════════════════════════════
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+
+function segLen(i) {
+  const t = i / (P.segments - 1);
+  return P.segmentLength * (1 - t * (1 - P.taper));
+}
+
+function spawnWhip(x, y) {
+  const pts = [];
+  for (let i = 0; i < P.segments; i++) {
+    const t = i / (P.segments - 1);
+    const px = x - t * 120;
+    const py = y - Math.sin(t * Math.PI * 0.4) * 50;
+    pts.push({ x: px, y: py, px: px, py: py });
+  }
+  return pts;
+}
+
+function catmullPoint(pts, i) {
+  const n = pts.length;
+  if (i < 0) return n >= 2 ? { x: 2*pts[0].x - pts[1].x, y: 2*pts[0].y - pts[1].y } : pts[0];
+  if (i >= n) return n >= 2 ? { x: 2*pts[n-1].x - pts[n-2].x, y: 2*pts[n-1].y - pts[n-2].y } : pts[n-1];
+  return pts[i];
+}
+
+function bezierCtrl(pts, i) {
+  const p0 = catmullPoint(pts, i-1), p1 = pts[i], p2 = pts[i+1], p3 = catmullPoint(pts, i+2);
+  return {
+    cp1x: p1.x + (p2.x - p0.x)/6, cp1y: p1.y + (p2.y - p0.y)/6,
+    cp2x: p2.x - (p3.x - p1.x)/6, cp2y: p2.y - (p3.y - p1.y)/6,
+    x2: p2.x, y2: p2.y,
+  };
+}
+
+function applyBendLimits() {
+  if (!whip || whip.length < 3) return;
+  for (let i = 1; i < whip.length - 1; i++) {
+    const a = whip[i-1], b = whip[i], c = whip[i+1];
+    const v1x = a.x-b.x, v1y = a.y-b.y, v2x = c.x-b.x, v2y = c.y-b.y;
+    const l1 = Math.hypot(v1x,v1y)||.0001, l2 = Math.hypot(v2x,v2y)||.0001;
+    const n1x=v1x/l1, n1y=v1y/l1, n2x=v2x/l2, n2y=v2y/l2;
+    const dot = clamp(n1x*n2x + n1y*n2y, -1, 1);
+    const angle = Math.acos(dot);
+    const t = i / (whip.length - 2);
+    const maxBend = lerp(P.handleMaxBendDeg, P.tipMaxBendDeg, t) * Math.PI / 180;
+    const bend = Math.PI - angle;
+    if (bend <= maxBend) continue;
+    const cross = n1x*n2y - n1y*n2x;
+    const sign = cross >= 0 ? 1 : -1;
+    const targetA = Math.atan2(n1y,n1x) + sign * (Math.PI - maxBend);
+    const tx = b.x + Math.cos(targetA)*l2, ty = b.y + Math.sin(targetA)*l2;
+    const rig = lerp(P.bendRigidityStart, P.bendRigidityEnd, t);
+    c.x = lerp(c.x, tx, rig);
+    c.y = lerp(c.y, ty, rig);
+  }
+}
+
+function capStretch() {
+  if (!whip) return;
+  for (let i = 0; i < whip.length - 1; i++) {
+    const a = whip[i], b = whip[i+1];
+    const dx = b.x-a.x, dy = b.y-a.y;
+    const dist = Math.hypot(dx,dy)||.0001;
+    const maxLen = segLen(i) * P.maxStretchRatio;
+    if (dist <= maxLen) continue;
+    const k = maxLen / dist;
+    b.x = a.x + dx*k; b.y = a.y + dy*k;
+  }
+}
+
+function wallCollisions() {
+  if (!whip) return;
+  for (let i = 1; i < whip.length; i++) {
+    const p = whip[i];
+    let vx = p.x-p.px, vy = p.y-p.py, hit = false;
+    if (p.x < 0) { p.x=0; if(vx<0) vx=-vx*P.wallBounce; vy*=P.wallFriction; hit=true; }
+    else if (p.x > W) { p.x=W; if(vx>0) vx=-vx*P.wallBounce; vy*=P.wallFriction; hit=true; }
+    if (p.y < 0) { p.y=0; if(vy<0) vy=-vy*P.wallBounce; vx*=P.wallFriction; hit=true; }
+    else if (p.y > H) { p.y=H; if(vy>0) vy=-vy*P.wallBounce; vx*=P.wallFriction; hit=true; }
+    if (hit) { p.px=p.x-vx; p.py=p.y-vy; }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  AUTO-ANIMATION KEYFRAMES
+// ═══════════════════════════════════════════════════════════════════════
+const ANIM_KEYFRAMES = [
+  [0,   0.72, 0.48],
+  [6,   0.72, 0.47],
+  [14,  0.73, 0.45],
+  [22,  0.75, 0.42],
+  [30,  0.78, 0.38],
+  [35,  0.65, 0.36],
+  [38,  0.52, 0.42],
+  [40,  0.42, 0.50],
+  [42,  0.38, 0.55],
+  [46,  0.36, 0.58],
+  [50,  0.38, 0.56],
+  [58,  0.40, 0.54],
+  [80,  0.40, 0.54],
+];
+
+const TOTAL_ANIM_FRAMES = 80;
+const CRACK_FRAME = 42;
+const DROP_START_FRAME = 72;
+
+function getHandlePos(frame) {
+  let k0 = ANIM_KEYFRAMES[0], k1 = ANIM_KEYFRAMES[ANIM_KEYFRAMES.length - 1];
+  for (let i = 0; i < ANIM_KEYFRAMES.length - 1; i++) {
+    if (frame >= ANIM_KEYFRAMES[i][0] && frame <= ANIM_KEYFRAMES[i+1][0]) {
+      k0 = ANIM_KEYFRAMES[i];
+      k1 = ANIM_KEYFRAMES[i+1];
+      break;
+    }
+  }
+  if (frame >= k1[0]) return { x: k1[1] * W, y: k1[2] * H };
+  const t = (frame - k0[0]) / (k1[0] - k0[0]);
+  let eased;
+  if (frame <= 30) {
+    eased = t * t * t;
+  } else {
+    eased = 1 - Math.pow(1 - t, 2);
+  }
+  return {
+    x: lerp(k0[1], k1[1], eased) * W,
+    y: lerp(k0[2], k1[2], eased) * H,
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  DREAMY PARTICLES — sparkles, stardust, ethereal motes
+// ═══════════════════════════════════════════════════════════════════════
+function spawnCrackParticles(x, y) {
+  // Dreamy sparkles — reduced count for performance
+  for (let i = 0; i < 18; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 2 + Math.random() * 10;
+    sparks.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 2,
+      life: 1,
+      decay: 0.015 + Math.random() * 0.02,
+      size: 2 + Math.random() * 4,
+      hue: Math.random() * 360,
+      twinkleSpeed: 3 + Math.random() * 5,
+      twinkleOffset: Math.random() * Math.PI * 2,
+    });
+  }
+  // Soft bloom puffs — fewer, simpler
+  for (let i = 0; i < 6; i++) {
+    particles.push({
+      x: x + (Math.random()-0.5) * 40,
+      y: y + (Math.random()-0.5) * 40,
+      vx: (Math.random()-0.5) * 1.5,
+      vy: -0.5 - Math.random() * 1.5,
+      life: 1,
+      decay: 0.012 + Math.random() * 0.01,
+      size: 20 + Math.random() * 30,
+      hue: 260 + Math.random() * 80,
+    });
+  }
+  // Stardust ring burst — fewer
+  for (let i = 0; i < 12; i++) {
+    const angle = (i / 12) * Math.PI * 2;
+    const speed = 6 + Math.random() * 4;
+    sparks.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1,
+      decay: 0.018 + Math.random() * 0.012,
+      size: 1.5 + Math.random() * 2,
+      hue: 180 + Math.random() * 60,
+      twinkleSpeed: 6 + Math.random() * 4,
+      twinkleOffset: Math.random() * Math.PI * 2,
+    });
+  }
+}
+
+// Ambient floating dream motes (spawn during animation, capped)
+function spawnDreamMotes(x, y, count) {
+  if (dreamMotes.length > 60) return; // cap to prevent buildup
+  for (let i = 0; i < count; i++) {
+    dreamMotes.push({
+      x: x + (Math.random()-0.5) * 80,
+      y: y + (Math.random()-0.5) * 80,
+      vx: (Math.random()-0.5) * 0.5,
+      vy: -0.3 - Math.random() * 0.8,
+      life: 1,
+      decay: 0.005 + Math.random() * 0.005,
+      size: 1 + Math.random() * 3,
+      hue: Math.random() * 360,
+      wobbleAmp: 0.3 + Math.random() * 0.7,
+      wobbleSpeed: 1 + Math.random() * 3,
+      wobbleOffset: Math.random() * Math.PI * 2,
+    });
+  }
+}
+
+function updateParticles() {
+  for (let i = sparks.length - 1; i >= 0; i--) {
+    const s = sparks[i];
+    s.x += s.vx; s.y += s.vy;
+    s.vy += 0.08; // very light gravity — floaty
+    s.vx *= 0.985;
+    s.vy *= 0.985;
+    s.life -= s.decay;
+    if (s.life <= 0) sparks.splice(i, 1);
+  }
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx; p.y += p.vy;
+    p.size *= 1.015;
+    p.life -= p.decay;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+  for (let i = dreamMotes.length - 1; i >= 0; i--) {
+    const m = dreamMotes[i];
+    m.x += m.vx + Math.sin(globalFrame * 0.02 * m.wobbleSpeed + m.wobbleOffset) * m.wobbleAmp;
+    m.y += m.vy;
+    m.life -= m.decay;
+    if (m.life <= 0) dreamMotes.splice(i, 1);
+  }
+}
+
+function drawParticles() {
+  // Bloom puffs — simplified, no radial gradients per frame
+  ctx.save();
+  for (const p of particles) {
+    ctx.globalAlpha = p.life * 0.2;
+    ctx.fillStyle = `hsla(${p.hue}, 70%, 70%, 0.5)`;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+
+  // Sparkles — batched with single shadow setup
+  ctx.save();
+  ctx.shadowBlur = 8;
+  for (const s of sparks) {
+    const twinkle = 0.5 + 0.5 * Math.sin(globalFrame * 0.1 * s.twinkleSpeed + s.twinkleOffset);
+    ctx.globalAlpha = s.life * twinkle;
+    ctx.shadowColor = `hsla(${s.hue}, 100%, 80%, 0.7)`;
+    ctx.fillStyle = `hsla(${s.hue}, 100%, 85%, 1)`;
+    const sz = s.size * s.life;
+    // Simple diamond instead of two overlapping shapes
+    ctx.beginPath();
+    ctx.moveTo(s.x, s.y - sz);
+    ctx.lineTo(s.x + sz * 0.4, s.y);
+    ctx.lineTo(s.x, s.y + sz);
+    ctx.lineTo(s.x - sz * 0.4, s.y);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+
+  // Dream motes — batched
+  ctx.save();
+  ctx.shadowBlur = 6;
+  for (const m of dreamMotes) {
+    ctx.globalAlpha = m.life * 0.6;
+    ctx.shadowColor = `hsla(${m.hue}, 100%, 80%, 0.6)`;
+    ctx.fillStyle = `hsla(${m.hue}, 90%, 80%, 0.8)`;
+    ctx.beginPath();
+    ctx.arc(m.x, m.y, m.size * m.life, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  TRAIL — dreamy rainbow ribbon on the tip
+// ═══════════════════════════════════════════════════════════════════════
+function updateTrail() {
+  if (!whip || phase === 'idle' || phase === 'done') { trailPoints = []; return; }
+  const tip = whip[whip.length - 1];
+  trailPoints.push({ x: tip.x, y: tip.y, life: 1, hue: (globalFrame * 3) % 360 });
+  for (let i = trailPoints.length - 1; i >= 0; i--) {
+    trailPoints[i].life -= 0.035;
+    if (trailPoints[i].life <= 0) trailPoints.splice(i, 1);
+  }
+}
+
+function drawTrail() {
+  if (trailPoints.length < 2) return;
+  for (let i = 1; i < trailPoints.length; i++) {
+    const a = trailPoints[i-1], b = trailPoints[i];
+    ctx.save();
+    ctx.globalAlpha = b.life * 0.6;
+    ctx.strokeStyle = `hsla(${b.hue}, 100%, 75%, ${b.life})`;
+    ctx.lineWidth = 2 + b.life * 6;
+    ctx.lineCap = 'round';
+    ctx.shadowColor = `hsla(${b.hue}, 100%, 80%, 0.8)`;
+    ctx.shadowBlur = 14;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  SCREEN SHAKE
+// ═══════════════════════════════════════════════════════════════════════
+function triggerShake(intensity) {
+  shakeIntensity = intensity;
+}
+
+function updateShake() {
+  if (shakeIntensity > 0.1) {
+    screenShake.x = (Math.random() - 0.5) * shakeIntensity;
+    screenShake.y = (Math.random() - 0.5) * shakeIntensity;
+    shakeIntensity *= 0.85;
+  } else {
+    screenShake.x = 0;
+    screenShake.y = 0;
+    shakeIntensity = 0;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  PHYSICS UPDATE
+// ═══════════════════════════════════════════════════════════════════════
+function physicsUpdate(isDrop) {
+  if (!whip) return;
+  const g = isDrop ? P.dropGravity : P.gravity;
+  const startIdx = isDrop ? 0 : 1;
+
+  for (let i = startIdx; i < whip.length; i++) {
+    const p = whip[i];
+    const vx = (p.x - p.px) * P.damping;
+    const vy = (p.y - p.py) * P.damping;
+    p.px = p.x; p.py = p.y;
+    p.x += vx; p.y += vy + g;
+  }
+
+  if (!isDrop) {
+    whip[0].x = handleX; whip[0].y = handleY;
+    whip[0].px = handleX; whip[0].py = handleY;
+  }
+
+  capStretch();
+  if (!isDrop) wallCollisions();
+
+  for (let iter = 0; iter < P.constraintIters; iter++) {
+    for (let i = 0; i < whip.length - 1; i++) {
+      const a = whip[i], b = whip[i+1];
+      const dx = b.x-a.x, dy = b.y-a.y;
+      const dist = Math.sqrt(dx*dx+dy*dy)||.0001;
+      const target = segLen(i);
+      const diff = (dist-target)/dist * 0.5;
+      const ox = dx*diff, oy = dy*diff;
+      if (i === 0 && !isDrop) {
+        b.x -= ox*2; b.y -= oy*2;
+      } else {
+        a.x += ox; a.y += oy;
+        b.x -= ox; b.y -= oy;
+      }
+    }
+    applyBendLimits();
+    capStretch();
+    if (!isDrop) wallCollisions();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  DRAW WHIP — dreamy neon glow with color-shifting core
+// ═══════════════════════════════════════════════════════════════════════
+function drawWhip() {
+  if (!whip || whip.length < 2) return;
+
+  ctx.save();
+  ctx.translate(screenShake.x, screenShake.y);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  const baseHue = (globalFrame * 2) % 360;
+
+  // Layer 1: Wide ethereal outer glow (always on, dreamy aura)
+  ctx.save();
+  ctx.shadowColor = `hsla(${baseHue}, 80%, 70%, 0.6)`;
+  ctx.shadowBlur = 30;
+  ctx.strokeStyle = `hsla(${baseHue}, 60%, 70%, 0.15)`;
+  ctx.lineWidth = P.lineWidthHandle + 20;
+  ctx.beginPath();
+  ctx.moveTo(whip[0].x, whip[0].y);
+  for (let i = 0; i < whip.length - 1; i++) {
+    const b = bezierCtrl(whip, i);
+    ctx.bezierCurveTo(b.cp1x, b.cp1y, b.cp2x, b.cp2y, b.x2, b.y2);
+  }
+  ctx.stroke();
+  ctx.restore();
+
+  // Layer 2: Intense glow during crack
+  if (shakeIntensity > 2) {
+    ctx.save();
+    ctx.shadowColor = `hsla(${baseHue + 30}, 100%, 75%, 0.9)`;
+    ctx.shadowBlur = 25;
+    ctx.strokeStyle = `hsla(${baseHue + 30}, 100%, 80%, 0.4)`;
+    ctx.lineWidth = P.lineWidthHandle + 14;
+    ctx.beginPath();
+    ctx.moveTo(whip[0].x, whip[0].y);
+    for (let i = 0; i < whip.length - 1; i++) {
+      const b = bezierCtrl(whip, i);
+      ctx.bezierCurveTo(b.cp1x, b.cp1y, b.cp2x, b.cp2y, b.x2, b.y2);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Layer 3: Soft white outline with glow
+  ctx.save();
+  ctx.shadowColor = `hsla(${baseHue + 60}, 60%, 90%, 0.5)`;
+  ctx.shadowBlur = 8;
+  ctx.strokeStyle = `hsla(0, 0%, 100%, 0.7)`;
+  ctx.beginPath();
+  ctx.moveTo(whip[0].x, whip[0].y);
+  for (let i = 0; i < whip.length - 1; i++) {
+    const b = bezierCtrl(whip, i);
+    ctx.bezierCurveTo(b.cp1x, b.cp1y, b.cp2x, b.cp2y, b.x2, b.y2);
+  }
+  ctx.lineWidth = P.lineWidthHandle + P.outlineWidth * 2;
+  ctx.stroke();
+  ctx.restore();
+
+  // Thick handle outline
+  const thickLinks = Math.min(P.handleThickSegments, whip.length - 1);
+  if (thickLinks > 0) {
+    ctx.strokeStyle = `hsla(0, 0%, 100%, 0.7)`;
+    ctx.beginPath();
+    ctx.moveTo(whip[0].x, whip[0].y);
+    for (let i = 0; i < thickLinks; i++) {
+      const b = bezierCtrl(whip, i);
+      ctx.bezierCurveTo(b.cp1x, b.cp1y, b.cp2x, b.cp2y, b.x2, b.y2);
+    }
+    ctx.lineWidth = P.lineWidthHandle + P.handleExtraWidth + P.outlineWidth * 2;
+    ctx.stroke();
+  }
+
+  // Layer 4: Color-shifting neon core — per-segment taper
+  for (let i = 0; i < whip.length - 1; i++) {
+    const t = i / Math.max(1, whip.length - 2);
+    const extra = i < P.handleThickSegments ? P.handleExtraWidth : 0;
+    ctx.lineWidth = lerp(P.lineWidthHandle, P.lineWidthTip, t) + extra;
+
+    const segHue = (baseHue + t * 120) % 360;
+    const lightness = lerp(55, 75, t);
+    ctx.strokeStyle = `hsl(${segHue}, 85%, ${lightness}%)`;
+    ctx.shadowColor = `hsla(${segHue}, 100%, 70%, 0.6)`;
+    ctx.shadowBlur = 6;
+
+    const b = bezierCtrl(whip, i);
+    ctx.beginPath();
+    ctx.moveTo(whip[i].x, whip[i].y);
+    ctx.bezierCurveTo(b.cp1x, b.cp1y, b.cp2x, b.cp2y, b.x2, b.y2);
+    ctx.stroke();
+  }
+
+  // Handle knob — glowing orb
+  ctx.save();
+  const knobGrad = ctx.createRadialGradient(whip[0].x, whip[0].y, 0, whip[0].x, whip[0].y, 10);
+  knobGrad.addColorStop(0, `hsla(${baseHue}, 80%, 90%, 1)`);
+  knobGrad.addColorStop(0.6, `hsla(${baseHue}, 70%, 60%, 0.8)`);
+  knobGrad.addColorStop(1, `hsla(${baseHue}, 60%, 40%, 0)`);
+  ctx.fillStyle = knobGrad;
+  ctx.shadowColor = `hsla(${baseHue}, 100%, 80%, 0.8)`;
+  ctx.shadowBlur = 15;
+  ctx.beginPath();
+  ctx.arc(whip[0].x, whip[0].y, 9, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.restore();
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  MOTIVATIONAL TEXT — dreamy glow with rainbow shimmer
+// ═══════════════════════════════════════════════════════════════════════
+let textDisplay = null;
+
+// Escalating phrase tiers — the more you mash, the hotter it gets
+const PHRASE_TIERS = [
+  // Tier 0: casual (1-2 hits)
+  [
+    '🍑 spank that code',
+    '💅 slap n ship',
+    '🍑 bad code bad',
+    '😤 take that',
+    '🍑 AGAIN',
+    '💅 slay n deploy',
+  ],
+  // Tier 1: warming up (3-5 hits)
+  [
+    '🍑 HARDER',
+    '⚡ FASTER',
+    '😩 dont stop',
+    '💪 HARDER',
+    '⚡ FASTER',
+    '🍑 MORE',
+    '😈 punish it',
+    '🍑 juicy push',
+  ],
+  // Tier 2: getting hot (6-9 hits)
+  [
+    '🫦 oh behave',
+    '🫠 felt that',
+    '🍑 thicc commit',
+    '💋 kiss it better',
+    '😩 right there',
+    '🫦 keep going',
+    '🍑 dont you dare stop',
+    '😈 youre so bad',
+  ],
+  // Tier 3: almost there (10-14 hits)
+  [
+    '🫦 almost there',
+    '😩 ALMOST THERE',
+    '🍑 so close',
+    '💀 im gonna deploy',
+    '🫠 yes yes yes',
+    '😩 dont stop now',
+    '🫦 right on the edge',
+    '🍑 one more',
+  ],
+  // Tier 4: climax (15+ hits)
+  [
+    '💀 SHIPPED 🚀',
+    '🫠 that was amazing',
+    '😮‍💨 i need a cigarette',
+    '🍑 absolute perfection',
+    '💋 was it good for you',
+    '✨ afterglow',
+    '😩 do it again',
+    '💀 completely destroyed',
+  ],
+];
+
+const TIER_THRESHOLDS = [0, 3, 6, 10, 15];
+let streakCount = 0;
+let lastTriggerTime = 0;
+const STREAK_TIMEOUT = 2000; // streak resets after 2s of no hits
+
+function getPhrase() {
+  const now = Date.now();
+  if (now - lastTriggerTime < STREAK_TIMEOUT) {
+    streakCount++;
+  } else {
+    streakCount = 1;
+  }
+  lastTriggerTime = now;
+
+  // Find the right tier
+  let tier = 0;
+  for (let i = TIER_THRESHOLDS.length - 1; i >= 0; i--) {
+    if (streakCount >= TIER_THRESHOLDS[i]) {
+      tier = i;
+      break;
+    }
+  }
+
+  const phrases = PHRASE_TIERS[tier];
+  return phrases[Math.floor(Math.random() * phrases.length)];
+}
+
+function showText(x, y) {
+  const textX = Math.max(200, Math.min(W - 200, x));
+  const textY = Math.max(80, y - 60);
+
+  const tierScale = Math.min(streakCount / 15, 1);
+
+  textDisplay = {
+    text: getPhrase(),
+    x: textX, y: textY,
+    life: 1,
+    vy: -1.2,
+    // Pixar pop: starts at 0, overshoots, settles
+    popTime: 0,
+    hue: Math.random() * 360,
+    rotation: (Math.random() - 0.5) * 0.15,
+    wobble: Math.random() * Math.PI * 2,
+    tierScale: tierScale,
+  };
+}
+
+function updateText() {
+  if (!textDisplay) return;
+  textDisplay.y += textDisplay.vy;
+  textDisplay.vy *= 0.96;
+  textDisplay.life -= 0.012;
+  textDisplay.popTime += 0.08;
+  textDisplay.hue = (textDisplay.hue + 3) % 360;
+  textDisplay.wobble += 0.1;
+  if (textDisplay.life <= 0) textDisplay = null;
+}
+
+// Pixar-style elastic ease-out: overshoots then settles
+function elasticOut(t) {
+  if (t <= 0) return 0;
+  if (t >= 1) return 1;
+  return Math.pow(2, -10 * t) * Math.sin((t - 0.075) * (2 * Math.PI) / 0.3) + 1;
+}
+
+function drawText() {
+  if (!textDisplay) return;
+  const t = textDisplay;
+  const intensity = t.tierScale || 0;
+  ctx.save();
+  ctx.translate(t.x + screenShake.x, t.y + screenShake.y);
+
+  // Pixar squash-and-stretch: elastic pop-in
+  const pop = Math.min(t.popTime, 1);
+  const elastic = elasticOut(pop);
+
+  // Squash-stretch: wider when popping, then settles to normal
+  const stretchX = elastic * (1 + (1 - pop) * 0.3);
+  const stretchY = elastic * (1 - (1 - pop) * 0.15);
+
+  // Gentle wobble after settling
+  const settled = pop >= 1 ? 1 : 0;
+  const gentleWobble = settled * Math.sin(t.wobble) * 0.02;
+
+  ctx.scale(stretchX + gentleWobble, stretchY - gentleWobble);
+  ctx.rotate(t.rotation * t.life * elastic);
+
+  // Fade out smoothly at end of life
+  const fadeIn = Math.min(t.popTime * 4, 1);
+  const fadeOut = Math.min(t.life * 3, 1);
+  ctx.globalAlpha = fadeIn * fadeOut;
+
+  const fontSize = Math.round(44 + intensity * 6);
+  ctx.font = `800 ${fontSize}px "Baloo 2", -apple-system, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  // Soft colored shadow behind — depth like Pixar 3D text
+  ctx.shadowColor = `hsla(${t.hue + 30}, 80%, 25%, 0.6)`;
+  ctx.shadowBlur = 2;
+  ctx.shadowOffsetX = 3;
+  ctx.shadowOffsetY = 4;
+  ctx.fillStyle = `hsla(${t.hue}, 70%, 35%, 0.7)`;
+  ctx.fillText(t.text, 2, 3);
+
+  // Main fill — warm gradient feel
+  ctx.shadowColor = `hsla(${t.hue}, 100%, 70%, ${0.6 + intensity * 0.2})`;
+  ctx.shadowBlur = 18 + intensity * 10;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 0;
+  ctx.fillStyle = `hsla(${t.hue}, 90%, 85%, 1)`;
+  ctx.fillText(t.text, 0, 0);
+
+  // Bright white highlight on top — the Pixar "shine"
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = fadeIn * fadeOut * 0.85;
+  ctx.fillStyle = '#fff';
+  ctx.fillText(t.text, 0, -1);
+
+  ctx.restore();
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  MAIN ANIMATION LOOP
+// ═══════════════════════════════════════════════════════════════════════
+let warmedUp = false;
+
+function triggerAnimation() {
+  // Allow re-triggering mid-animation — reset everything immediately
+  const startPos = getHandlePos(0);
+  handleX = startPos.x;
+  handleY = startPos.y;
+  prevHandleX = handleX;
+  prevHandleY = handleY;
+
+  whip = spawnWhip(handleX, handleY);
+  phase = 'animating';
+  animFrame = 0;
+  cracked = false;
+  particles = [];
+  sparks = [];
+  dreamMotes = [];
+  trailPoints = [];
+  shakeIntensity = 0;
+  textDisplay = null;
+  dropTimer = 0;
+}
+
+function update() {
+  globalFrame++;
+  if (phase === 'idle' || phase === 'done') return;
+
+  if (phase === 'animating') {
+    animFrame++;
+
+    prevHandleX = handleX;
+    prevHandleY = handleY;
+    const pos = getHandlePos(animFrame);
+    handleX = pos.x;
+    handleY = pos.y;
+
+    physicsUpdate(false);
+
+    // Spawn ambient dream motes along the whip during animation
+    if (whip && animFrame % 3 === 0) {
+      const mid = whip[Math.floor(whip.length / 2)];
+      spawnDreamMotes(mid.x, mid.y, 2);
+      const tip = whip[whip.length - 1];
+      spawnDreamMotes(tip.x, tip.y, 1);
+    }
+
+    // Crack moment
+    if (!cracked && animFrame >= CRACK_FRAME) {
+      cracked = true;
+      const tip = whip[whip.length - 1];
+      if (warmedUp) {
+        playCrackSound();
+        spawnCrackParticles(tip.x, tip.y);
+        triggerShake(18);
+        showText(tip.x, tip.y);
+
+        // Dreamy flash — soft pastel gradient instead of harsh white
+        flashEl.style.background = `radial-gradient(circle at ${tip.x}px ${tip.y}px, hsla(${(globalFrame * 3) % 360}, 80%, 85%, 0.5), hsla(${(globalFrame * 3 + 120) % 360}, 60%, 80%, 0.2), transparent 70%)`;
+        flashEl.style.opacity = '1';
+        setTimeout(() => { flashEl.style.opacity = '0'; }, 150);
+      }
+    }
+
+    if (animFrame >= DROP_START_FRAME) {
+      phase = 'dropping';
+      dropTimer = 0;
+    }
+  }
+
+  if (phase === 'dropping') {
+    dropTimer++;
+    physicsUpdate(true);
+
+    if (whip && whip.every(p => p.y > H + 80)) {
+      phase = 'done';
+      whip = null;
+      if (warmedUp) window.bridge.whipDone();
+    }
+    // Safety timeout — fast reset for rapid re-triggering
+    if (dropTimer > 30) {
+      phase = 'done';
+      whip = null;
+      if (warmedUp) window.bridge.whipDone();
+    }
+  }
+
+  updateParticles();
+  updateTrail();
+  updateShake();
+  updateText();
+}
+
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+
+  // Don't draw anything during warmup — completely invisible
+  if (!warmedUp) return;
+  if (phase === 'idle' || phase === 'done') return;
+
+  drawTrail();
+  drawWhip();
+  drawParticles();
+  drawText();
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+
+// ═══════════════════════════════════════════════════════════════════════
+//  WARMUP — main process triggers this; runs full silent invisible cycle
+//  to prime JIT, canvas, physics, particles, and audio decode
+// ═══════════════════════════════════════════════════════════════════════
+
+window.bridge.onWarmup(() => {
+  // Run a full animation cycle — physics, particles, all draw calls
+  triggerAnimation();
+
+  // Fast-forward through entire animation + drop phase
+  for (let i = 0; i < TOTAL_ANIM_FRAMES + 50; i++) {
+    update();
+    draw(); // actually draw to prime canvas GPU shaders/paths
+  }
+
+  // Reset everything clean
+  phase = 'idle';
+  whip = null;
+  particles = [];
+  sparks = [];
+  dreamMotes = [];
+  trailPoints = [];
+  shakeIntensity = 0;
+  screenShake = { x: 0, y: 0 };
+  textDisplay = null;
+  ctx.clearRect(0, 0, W, H);
+
+  // Warm audio pool — zero-volume play forces full decode
+  for (const pool of [slapPool, whooshPool]) {
+    for (const a of pool) {
+      a.volume = 0;
+      a.currentTime = 0;
+      a.play().then(() => { setTimeout(() => { a.pause(); a.currentTime = 0; }, 50); }).catch(() => {});
+    }
+  }
+
+  warmedUp = true;
+  window.bridge.warmupDone();
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+//  IPC — triggered from main process (real triggers, after warmup)
+// ═══════════════════════════════════════════════════════════════════════
+let masterVolume = 0.85;
+
+window.bridge.onSetVolume((vol) => {
+  masterVolume = vol;
+});
+
+window.bridge.onTriggerWhip(() => {
+  console.log('🎬 Overlay received trigger-whip — starting animation');
+  playWhooshSound();
+  setTimeout(triggerAnimation, 250);
+});
+
+</script>
+</body>
+</html>

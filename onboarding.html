@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html>
+<head>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100vw;height:100vh;overflow:hidden;background:transparent;
+    font-family:'DM Sans',-apple-system,sans-serif;color:#fff;user-select:none;
+    -webkit-font-smoothing:antialiased}
+
+  .dim{position:fixed;inset:0;z-index:1;background:rgba(6,3,1,0.92);
+    opacity:0;transition:opacity 2.5s ease}
+  .dim.on{opacity:1}.dim.out{opacity:0;transition:opacity 2s ease}
+
+  .floor{position:fixed;bottom:-30%;left:-25%;right:-25%;height:85%;
+    z-index:2;pointer-events:none;opacity:0;transition:opacity 2.5s ease 0.5s}
+  .floor.on{opacity:1}.floor.out{opacity:0;transition:opacity 1.8s ease}
+  .floor .a{position:absolute;inset:0;
+    background:radial-gradient(ellipse 110% 75% at 50% 100%,
+      rgba(255,120,30,0.5) 0%,rgba(255,55,85,0.22) 25%,
+      rgba(140,35,160,0.08) 50%,transparent 72%)}
+  .floor .b{position:absolute;inset:0;
+    background:radial-gradient(ellipse 70% 60% at 50% 100%,
+      rgba(255,190,60,0.4) 0%,rgba(255,100,45,0.14) 35%,transparent 60%);
+    animation:br 3.5s ease-in-out infinite alternate}
+  .floor .c{position:absolute;inset:0;
+    background:radial-gradient(ellipse 45% 42% at 50% 100%,
+      rgba(255,240,160,0.28) 0%,rgba(255,155,35,0.1) 45%,transparent 65%);
+    animation:br 5s ease-in-out infinite alternate-reverse}
+  @keyframes br{0%{transform:scaleX(1) scaleY(1);opacity:.7}100%{transform:scaleX(1.06) scaleY(1.04);opacity:1}}
+
+  canvas#embers{position:fixed;inset:0;z-index:3;pointer-events:none}
+
+  .stage{position:fixed;inset:0;z-index:10;display:flex;align-items:center;
+    justify-content:center;pointer-events:none}
+  .inner{text-align:center;max-width:500px;padding:32px;pointer-events:auto;
+    opacity:0;transform:translateY(24px) scale(0.97);filter:blur(4px);
+    transition:opacity .9s cubic-bezier(.16,1,.3,1),
+               transform .9s cubic-bezier(.16,1,.3,1),
+               filter .9s cubic-bezier(.16,1,.3,1)}
+  .inner.show{opacity:1;transform:translateY(0) scale(1);filter:blur(0)}
+  .inner.out{opacity:0;transform:translateY(-12px) scale(0.98);filter:blur(3px);
+    transition:all .45s cubic-bezier(.4,0,1,1)}
+
+  /* ── Rising peach for intro ── */
+  .peach-rise{
+    font-size:80px;display:block;margin-bottom:20px;
+    opacity:0;transform:translateY(250px) scale(0.4) rotate(-10deg);
+    filter:drop-shadow(0 0 60px rgba(255,120,30,0.6)) drop-shadow(0 0 120px rgba(255,55,85,0.3))
+           blur(8px);
+  }
+  .peach-rise.float{
+    opacity:1;transform:translateY(0) scale(1) rotate(0deg);
+    filter:drop-shadow(0 0 60px rgba(255,120,30,0.6)) drop-shadow(0 0 120px rgba(255,55,85,0.3))
+           blur(0px);
+    transition:opacity 1.2s cubic-bezier(.16,1,.3,1),
+               transform 2.2s cubic-bezier(.34,1.56,.64,1),
+               filter 1.5s ease;
+  }
+  .peach-rise.landed{
+    animation:hov 4s ease-in-out infinite;
+  }
+  @keyframes hov{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+
+  /* ── Flying peach to tray ── */
+  .peach-fly{
+    position:fixed;font-size:80px;z-index:100;
+    transition:all 1.8s cubic-bezier(.34,1.56,.64,1);
+    filter:drop-shadow(0 0 30px rgba(255,120,30,0.5));
+  }
+
+  h1{font-weight:700;font-size:48px;line-height:1.1;margin-bottom:14px;
+    letter-spacing:-.03em;color:rgba(255,248,240,.95);
+    text-shadow:0 0 50px rgba(255,120,30,.15)}
+  .sub{font-size:17px;font-weight:400;color:rgba(255,215,175,.45);
+    line-height:1.7;margin-bottom:40px}
+  .sub em{font-style:normal;color:rgba(255,200,140,.65)}
+
+  .btn{display:inline-flex;align-items:center;gap:8px;
+    background:rgba(255,120,30,.18);border:none;color:rgba(255,235,210,.9);
+    font-family:'DM Sans',sans-serif;font-size:15px;font-weight:600;
+    padding:15px 40px;border-radius:50px;cursor:pointer;
+    transition:all .3s cubic-bezier(.16,1,.3,1);
+    box-shadow:0 0 40px rgba(255,120,30,.12),0 0 80px rgba(255,55,85,.06)}
+  .btn:hover{background:rgba(255,120,30,.32);
+    box-shadow:0 0 60px rgba(255,120,30,.25);transform:translateY(-2px)}
+  .btn:active{transform:translateY(0) scale(.97)}
+
+  .skip{display:inline-flex;align-items:center;background:rgba(255,200,150,.06);border:none;
+    color:rgba(255,200,150,.4);font-family:'DM Sans',sans-serif;
+    font-size:13px;font-weight:500;padding:15px 28px;border-radius:50px;cursor:pointer;
+    transition:all .2s}
+  .skip:hover{color:rgba(255,200,150,.7);background:rgba(255,200,150,.1)}
+
+  /* ── Enter key ── */
+  .enter-key{
+    width:200px;height:64px;margin:0 auto 20px;
+    background:rgba(255,255,255,.04);border-radius:14px;
+    display:flex;align-items:center;justify-content:center;gap:10px;
+    cursor:default;transition:all .15s;position:relative;overflow:hidden;
+    pointer-events:none}
+  .enter-key:hover{background:rgba(255,255,255,.07)}
+  .enter-key.pressed{background:rgba(255,120,30,.25);transform:scale(.95);
+    box-shadow:0 0 50px rgba(255,120,30,.4)}
+  .enter-key .rip{position:absolute;inset:0;
+    background:radial-gradient(circle at 50% 50%,rgba(255,120,30,.35),transparent 70%);
+    opacity:0;transform:scale(0);transition:all .4s ease}
+  .enter-key.pressed .rip{opacity:1;transform:scale(1.5)}
+  .enter-key span{position:relative;z-index:1;font-size:16px;font-weight:600;
+    color:rgba(255,235,210,.7);letter-spacing:.04em}
+  .enter-key svg{position:relative;z-index:1}
+  .hint-pulse{font-size:13px;color:rgba(255,200,150,.3);margin-top:10px;
+    animation:pul 2s ease-in-out infinite}
+  @keyframes pul{0%,100%{opacity:.4}50%{opacity:1}}
+
+  /* ── Setup ── */
+  .setup-row{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:16px}
+  .setup-label{font-size:14px;color:rgba(255,210,170,.4);font-weight:500;min-width:90px;text-align:right}
+  .setup-btn{display:inline-flex;align-items:center;gap:8px;
+    background:rgba(255,120,30,.15);border:none;color:rgba(255,220,180,.8);
+    font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;
+    padding:10px 20px;border-radius:50px;cursor:pointer;transition:all .2s;
+    box-shadow:0 0 15px rgba(255,120,30,.08)}
+  .setup-btn:hover{background:rgba(255,120,30,.25);
+    box-shadow:0 0 25px rgba(255,120,30,.15);transform:translateY(-1px)}
+  .setup-btn svg{flex-shrink:0}
+  .folder-result{font-size:13px;color:rgba(255,180,100,.7);margin-bottom:12px;min-height:18px}
+  .access-hint{font-size:11px;color:rgba(255,200,150,.2);
+    font-family:'SF Mono','Fira Code',monospace;letter-spacing:.02em}
+  .note{font-size:13px;color:rgba(255,200,150,.22);margin:20px 0 28px;line-height:1.6}
+  .note em{font-style:normal;color:rgba(255,200,140,.4)}
+
+  /* ── Tray guide (top-right) ── */
+  .tray-guide{
+    position:fixed;top:6px;right:80px;z-index:50;
+    display:flex;align-items:center;gap:10px;
+    opacity:0;transform:translateY(-10px);
+    transition:all 1s cubic-bezier(.16,1,.3,1)}
+  .tray-guide.show{opacity:1;transform:translateY(0)}
+  .tray-guide.out{opacity:0;transition:opacity 1.5s ease}
+  .tray-guide-text{font-size:14px;color:rgba(255,220,170,.8);
+    background:rgba(255,120,30,.15);padding:10px 20px;border-radius:10px;
+    white-space:nowrap;
+    box-shadow:0 0 30px rgba(255,120,30,.15);
+    animation:guideGlow 2s ease-in-out infinite alternate}
+  @keyframes guideGlow{
+    0%{box-shadow:0 0 20px rgba(255,120,30,.1)}
+    100%{box-shadow:0 0 40px rgba(255,120,30,.25)}
+  }
+  .tray-guide-arrow{font-size:18px;color:rgba(255,200,150,.6);animation:bob 1s ease-in-out infinite}
+  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+
+  .dots{position:fixed;bottom:72px;left:50%;transform:translateX(-50%);
+    display:flex;gap:8px;z-index:20;transition:opacity 1.5s ease}
+  .dot{width:6px;height:6px;border-radius:50%;background:rgba(255,200,150,.1);
+    transition:all .5s cubic-bezier(.16,1,.3,1)}
+  .dot.active{background:rgba(255,150,60,.6);box-shadow:0 0 10px rgba(255,120,30,.4);
+    width:20px;border-radius:3px}
+</style>
+</head>
+<body>
+<div class="dim" id="dim"></div>
+<div class="floor" id="floor"><div class="a"></div><div class="b"></div><div class="c"></div></div>
+<canvas id="embers"></canvas>
+<div class="stage"><div class="inner" id="inner"></div></div>
+<div class="tray-guide" id="trayGuide">
+  <span class="tray-guide-text">I live up here now</span>
+  <span class="tray-guide-arrow">↑</span>
+</div>
+<div class="dots" id="dots"></div>
+
+<script>
+
+// ── Embers ──
+const ec=document.getElementById('embers'),ex=ec.getContext('2d');
+let W,H,frame=0;
+function resize(){W=ec.width=innerWidth;H=ec.height=innerHeight}
+resize();addEventListener('resize',resize);
+const embs=[];
+for(let i=0;i<35;i++)embs.push({x:Math.random()*W,y:H+Math.random()*300,
+  vy:-.2-Math.random()*.6,size:.8+Math.random()*2,hue:15+Math.random()*35,
+  alpha:.2+Math.random()*.4,wobble:Math.random()*Math.PI*2,ws:.5+Math.random()*1.5});
+function drawEmbers(){
+  frame++;ex.clearRect(0,0,W,H);
+  for(const e of embs){
+    e.x+=Math.sin(frame*.007*e.ws+e.wobble)*.4;e.y+=e.vy;
+    if(e.y<-20){e.y=H+20;e.x=Math.random()*W}
+    const fade=Math.min(1,(H-e.y)/(H*.6));
+    ex.save();ex.globalAlpha=e.alpha*fade;
+    ex.shadowColor=`hsla(${e.hue},100%,70%,.7)`;ex.shadowBlur=6;
+    ex.fillStyle=`hsla(${e.hue},100%,80%,1)`;
+    ex.beginPath();ex.arc(e.x,e.y,e.size,0,Math.PI*2);ex.fill();ex.restore();
+  }
+  requestAnimationFrame(drawEmbers);
+}
+drawEmbers();
+
+// ── Sound ──
+const audio=new(window.AudioContext||window.webkitAudioContext)();
+
+// Ambient warm pad — plays when glow appears
+function ambientPad(){
+  const now=audio.currentTime;
+  // Warm chord: C3, E3, G3, C4 with slow attack
+  [130.8, 164.8, 196.0, 261.6].forEach((freq,i)=>{
+    const osc=audio.createOscillator();
+    osc.type='sine';
+    osc.frequency.value=freq;
+    const g=audio.createGain();
+    g.gain.setValueAtTime(0,now);
+    g.gain.linearRampToValueAtTime(0.012,now+2+i*0.3);
+    g.gain.linearRampToValueAtTime(0.008,now+5);
+    g.gain.linearRampToValueAtTime(0,now+8);
+    osc.connect(g).connect(audio.destination);
+    osc.start(now+i*0.2);
+    osc.stop(now+8);
+  });
+}
+
+function chime(){
+  const now=audio.currentTime;
+  [523,784].forEach((f,i)=>{
+    const o=audio.createOscillator();o.type='sine';o.frequency.value=f;
+    const g=audio.createGain();g.gain.setValueAtTime(0,now);
+    g.gain.linearRampToValueAtTime(.025,now+.04);
+    g.gain.exponentialRampToValueAtTime(.001,now+.5+i*.15);
+    o.connect(g).connect(audio.destination);o.start(now+i*.05);o.stop(now+.7+i*.15);
+  });
+}
+
+// Whoosh — rising sweep for peach entrance
+function whooshSound(){
+  const now=audio.currentTime;
+  // Noise burst
+  const buf=audio.createBuffer(1,audio.sampleRate*.3,audio.sampleRate);
+  const d=buf.getChannelData(0);
+  for(let i=0;i<d.length;i++){
+    const t=i/d.length;
+    d[i]=(Math.random()*2-1)*Math.sin(t*Math.PI)*0.8;
+  }
+  const src=audio.createBufferSource();src.buffer=buf;
+  const bp=audio.createBiquadFilter();bp.type='bandpass';
+  bp.frequency.setValueAtTime(300,now);
+  bp.frequency.exponentialRampToValueAtTime(1200,now+.25);
+  bp.Q.value=0.6;
+  const g=audio.createGain();
+  g.gain.setValueAtTime(0,now);
+  g.gain.linearRampToValueAtTime(.08,now+.08);
+  g.gain.exponentialRampToValueAtTime(.001,now+.3);
+  src.connect(bp).connect(g).connect(audio.destination);src.start(now);
+
+  // Tonal rise
+  const osc=audio.createOscillator();osc.type='sine';
+  osc.frequency.setValueAtTime(200,now);
+  osc.frequency.exponentialRampToValueAtTime(600,now+.3);
+  const og=audio.createGain();
+  og.gain.setValueAtTime(0,now);
+  og.gain.linearRampToValueAtTime(.03,now+.05);
+  og.gain.exponentialRampToValueAtTime(.001,now+.35);
+  osc.connect(og).connect(audio.destination);osc.start(now);osc.stop(now+.4);
+}
+
+// ── SVGs ──
+const enterSVG=`<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="rgba(255,220,180,.6)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 10 4 15 9 20"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/></svg>`;
+const folderSVG=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,200,150,.5)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`;
+
+// ── Pages ──
+const inner=document.getElementById('inner'),dotsEl=document.getElementById('dots');
+const dim=document.getElementById('dim'),floor=document.getElementById('floor');
+const trayGuide=document.getElementById('trayGuide');
+let cur=-1,transitioning=false,enterDone=false;
+
+const pages=[
+  // 0: Hero — peach rises from glow
+  ()=>`<span class="peach-rise" id="peachRise">🍑</span>
+    <h1 style="opacity:0" id="heroTitle">Whip Me Bad</h1>
+    <div class="sub" style="opacity:0" id="heroSub">Slap your AI into shipping faster</div>
+    <button class="btn" style="opacity:0" id="heroBtn" onclick="next()">Get Started</button>`,
+
+  // 1: Try Enter — keyboard only
+  ()=>`<div class="sub" style="margin-bottom:24px">Press Enter to crack the whip</div>
+    <div class="enter-key" id="enterKey">
+      <div class="rip"></div>${enterSVG}<span>Enter</span>
+    </div>
+    <div class="hint-pulse" id="keyHint">press your Enter key</div>`,
+
+  // 2: Setup — clean, minimal
+  ()=>`<h1 style="font-size:32px;margin-bottom:24px">Almost there</h1>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:20px;width:100%">
+      <div style="display:flex;align-items:center;gap:14px;background:rgba(120,200,80,.06);padding:14px 22px;border-radius:14px">
+        <div style="flex-shrink:0;width:24px;height:24px;display:flex;align-items:center;justify-content:center">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(160,220,120,.7)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>
+        <div style="flex:1;text-align:left">
+          <div style="font-size:14px;font-weight:600;color:rgba(170,225,130,.8)">Enter key ready</div>
+          <div style="font-size:12px;color:rgba(160,210,120,.3)">Works globally in any app</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:14px;background:rgba(255,120,30,.06);padding:14px 22px;border-radius:14px">
+        <div style="font-size:20px;flex-shrink:0;width:24px;text-align:center">📂</div>
+        <div style="flex:1;text-align:left">
+          <div style="font-size:14px;font-weight:600;color:rgba(255,235,210,.8)">Projects folder</div>
+          <div style="font-size:12px;color:rgba(255,200,150,.35)">Auto-install hooks in Kiro projects</div>
+        </div>
+        <button class="setup-btn" onclick="pickFolder()">Choose</button>
+      </div>
+      <div class="folder-result" id="folder-path"></div>
+    </div>
+    <div style="display:flex;gap:12px;align-items:center;justify-content:center">
+      <button class="btn" onclick="finish()">Let's go</button>
+      <button class="skip" onclick="finish()">skip →</button>
+    </div>`,
+
+  // 3: Done — peach flies to tray position
+  ()=>`<span id="finalPeach" style="font-size:80px;display:block;margin-bottom:16px;
+    filter:drop-shadow(0 0 50px rgba(255,120,30,.5)) drop-shadow(0 0 100px rgba(255,55,85,.25));
+    animation:hov 4s ease-in-out infinite">🍑</span>
+    <h1 style="font-size:36px" id="doneTitle">You're all set</h1>
+    <div class="sub" id="doneSub">Now go ship something.</div>`,
+];
+
+for(let i=0;i<pages.length;i++){const d=document.createElement('div');d.className='dot';dotsEl.appendChild(d)}
+
+function show(idx){
+  if(transitioning)return;transitioning=true;
+  inner.classList.remove('show');inner.classList.add('out');
+  const delay=cur<0?0:400;
+  setTimeout(()=>{
+    inner.classList.remove('out');inner.innerHTML=pages[idx]();
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      inner.classList.add('show');transitioning=false;
+      if(idx===0)animateHero();
+      if(idx===3)animateDone();
+    }));
+  },delay);
+  dotsEl.querySelectorAll('.dot').forEach((d,i)=>d.classList.toggle('active',i===idx));
+  cur=idx;if(idx>0)chime();
+}
+
+// ── Hero: peach rises, then title/sub/btn fade in with smooth animations, then whip fires ──
+function animateHero(){
+  const peach=document.getElementById('peachRise');
+  const title=document.getElementById('heroTitle');
+  const sub=document.getElementById('heroSub');
+  const btn=document.getElementById('heroBtn');
+
+  // Set initial states for smooth entrance
+  [title,sub,btn].forEach(el=>{
+    el.style.transform='translateY(16px) scale(0.97)';
+    el.style.filter='blur(4px)';
+  });
+
+  // Peach rises from bottom with bounce + whoosh
+  setTimeout(()=>{peach.classList.add('float');whooshSound()},300);
+
+  // Fire whoosh sound when peach arrives (no whip — keep intro clean)
+  setTimeout(()=>{
+    whooshSound();
+  },1800);
+
+  // After peach lands, reveal text with staggered blur-in
+  setTimeout(()=>{
+    peach.classList.add('landed');
+    title.style.transition='opacity 1s cubic-bezier(.16,1,.3,1), transform 1s cubic-bezier(.16,1,.3,1), filter 1s ease';
+    title.style.opacity='1';title.style.transform='translateY(0) scale(1)';title.style.filter='blur(0)';
+  },2200);
+  setTimeout(()=>{
+    sub.style.transition='opacity 1s cubic-bezier(.16,1,.3,1), transform 1s cubic-bezier(.16,1,.3,1), filter 1s ease';
+    sub.style.opacity='1';sub.style.transform='translateY(0) scale(1)';sub.style.filter='blur(0)';
+  },2700);
+  setTimeout(()=>{
+    btn.style.transition='opacity .8s cubic-bezier(.16,1,.3,1), transform .8s cubic-bezier(.16,1,.3,1), filter .8s ease';
+    btn.style.opacity='1';btn.style.transform='translateY(0) scale(1)';btn.style.filter='blur(0)';
+  },3200);
+}
+
+// ── Done: peach flies to actual tray icon position ──
+async function animateDone(){
+  // Get real tray icon position
+  let targetX = W - 100, targetY = 8;
+  try {
+    const bounds = await window.bridge.getTrayBounds();
+    if (bounds) {
+      targetX = bounds.x + bounds.width / 2;
+      targetY = bounds.y + bounds.height / 2;
+    }
+  } catch(_) {}
+
+  // Wait for content to be visible, then start the flight
+  setTimeout(()=>{
+    const peach = document.getElementById('finalPeach');
+    const title = document.getElementById('doneTitle');
+    const sub = document.getElementById('doneSub');
+    if (!peach) return;
+
+    // Stop the hover animation
+    peach.style.animation = 'none';
+
+    const rect = peach.getBoundingClientRect();
+
+    // Create flying clone at the peach's current position
+    const fly = document.createElement('div');
+    fly.className = 'peach-fly';
+    fly.textContent = '🍑';
+    fly.style.left = (rect.left + rect.width/2 - 40) + 'px';
+    fly.style.top = rect.top + 'px';
+    fly.style.fontSize = '80px';
+    fly.style.opacity = '1';
+    document.body.appendChild(fly);
+
+    // Hide original peach
+    peach.style.transition = 'opacity .3s ease';
+    peach.style.opacity = '0';
+
+    // Fly to tray position
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      fly.style.left = targetX + 'px';
+      fly.style.top = targetY + 'px';
+      fly.style.fontSize = '16px';
+      fly.style.opacity = '0.6';
+    }));
+
+    // Fade out the flying peach after it arrives
+    setTimeout(() => {
+      fly.style.transition = 'opacity 1s ease';
+      fly.style.opacity = '0';
+    }, 1800);
+
+    // Show tray guide near actual tray position
+    trayGuide.style.right = Math.max(20, W - targetX - 10) + 'px';
+    trayGuide.style.top = (targetY + 28) + 'px';
+    setTimeout(() => trayGuide.classList.add('show'), 1800);
+
+    // Clean up flying peach
+    setTimeout(() => fly.remove(), 3000);
+  }, 1200);
+}
+
+function next(){if(cur<pages.length-1)show(cur+1)}
+function pickFolder(){window.bridge.pickFolder()}
+
+function simulateEnter(){
+  const key=document.getElementById('enterKey');
+  if(!key||enterDone)return;
+  enterDone=true;
+
+  // 1. Animate the key press
+  key.classList.add('pressed');
+
+  // 2. Release key, trigger whip (use setTimeout to not block animation)
+  setTimeout(()=>{
+    key.classList.remove('pressed');
+    // Trigger whip in background — don't wait for it
+    fetch('http://127.0.0.1:31338/whip').catch(()=>{});
+  },250);
+
+  // 3. Show "nice" with animation after whip lands
+  setTimeout(()=>{
+    const hint=document.getElementById('keyHint');
+    if(hint){
+      hint.style.transition='all .3s cubic-bezier(.16,1,.3,1)';
+      hint.style.opacity='0';
+      hint.style.transform='scale(0.8)';
+      setTimeout(()=>{
+        hint.textContent='\u{1F351} nice.';
+        hint.style.color='rgba(255,180,100,.8)';
+        hint.style.animation='none';
+        hint.style.fontSize='20px';
+        hint.style.fontWeight='700';
+        hint.style.transform='scale(1.15)';
+        hint.style.opacity='1';
+        setTimeout(()=>{
+          hint.style.transition='all .4s ease';
+          hint.style.transform='scale(1)';
+        },300);
+        setTimeout(()=>{
+          hint.style.transition='all .6s ease';
+          hint.style.opacity='0';
+          hint.style.transform='scale(0.9) translateY(-8px)';
+        },1200);
+      },250);
+    }
+  },1400);
+
+  // 4. Advance
+  setTimeout(()=>next(),3000);
+}
+
+function finish(){
+  show(pages.length-1);
+  // Smooth outro — give time for peach flight + tray guide
+  setTimeout(()=>{
+    inner.classList.remove('show');inner.classList.add('out');
+    dim.classList.add('out');floor.classList.add('out');
+    trayGuide.classList.add('out');
+    dotsEl.style.opacity='0';
+  },5000);
+  setTimeout(()=>window.bridge.onboardingDone(),7000);
+}
+
+window.bridge.onFolderPicked((p)=>{
+  if(p){const el=document.getElementById('folder-path');if(el)el.textContent='✅ '+p}
+});
+
+document.addEventListener('keydown',(e)=>{
+  if(e.key==='Enter'){
+    if(cur===0)next();
+    else if(cur===1&&!enterDone)simulateEnter();
+    else if(cur===2)finish();
+  }
+  if(e.key==='ArrowRight'){if(cur===2)finish();else next()}
+});
+
+// ── Entrance ──
+setTimeout(()=>{dim.classList.add('on');ambientPad()},200);
+setTimeout(()=>floor.classList.add('on'),500);
+setTimeout(()=>show(0),1800);
+
+</script>
+</body>
+</html>

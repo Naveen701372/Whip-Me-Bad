@@ -1,0 +1,14 @@
+{
+  "enabled": true,
+  "name": "Whip Me Bad — Task Complete",
+  "description": "Triggers a whip crack after each spec task completes. Requires Whip Me Bad to be running.",
+  "version": "1",
+  "when": {
+    "type": "postTaskExecution"
+  },
+  "then": {
+    "type": "runCommand",
+    "command": "curl -s http://127.0.0.1:31338/whip > /dev/null 2>&1 || true",
+    "timeout": 3
+  }
+}
