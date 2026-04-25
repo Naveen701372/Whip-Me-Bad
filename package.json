@@ -1,7 +1,8 @@
 {
   "name": "whip-me-bad",
   "version": "1.0.0",
-  "description": "Slap your AI into shipping faster 🍑",
+  "description": "A satisfying whip crack every time your AI does something 🍑",
+  "author": "Naveen <naveen@whipmebad.com>",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -18,7 +19,10 @@
     "mac": {
       "category": "public.app-category.developer-tools",
       "icon": "logo.png",
-      "target": ["dmg", "zip"],
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
@@ -31,12 +35,22 @@
       "title": "Whip Me Bad",
       "backgroundColor": "#0a0608",
       "contents": [
-        { "x": 130, "y": 220 },
-        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
       ]
     },
     "win": {
-      "target": ["nsis"],
+      "target": [
+        "nsis"
+      ],
       "icon": "logo.ico"
     },
     "nsis": {
@@ -70,10 +84,9 @@
       }
     ]
   },
-  "dependencies": {
-    "electron": "^33.0.0"
-  },
+  "dependencies": {},
   "devDependencies": {
+    "electron": "^33.0.0",
     "electron-builder": "^25.1.8"
   }
 }

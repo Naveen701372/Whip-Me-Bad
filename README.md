@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Naveen701372/Whip-Me-Bad/releases/latest">
+  <a href="https://github.com/heynaavi/Whip-Me-Bad/releases/latest">
     <img src="https://img.shields.io/badge/download-macOS-orange?style=for-the-badge" alt="Download macOS" />
   </a>
   &nbsp;
@@ -36,7 +36,7 @@ A dreamy neon whip cracks across your screen with a satisfying slap every time y
 
 | Platform | Status |
 |----------|--------|
-| macOS (.dmg) | [Download latest](https://github.com/Naveen701372/Whip-Me-Bad/releases/latest) |
+| macOS (.dmg) | [Download latest](https://github.com/heynaavi/Whip-Me-Bad/releases/latest) |
 | Windows (.exe) | Coming soon |
 
 Or [build from source](#build-from-source).
@@ -130,7 +130,7 @@ See the `hooks/` folder for how the Kiro integration works — it's just JSON co
 ## Build from Source
 
 ```bash
-git clone https://github.com/Naveen701372/Whip-Me-Bad.git
+git clone https://github.com/heynaavi/Whip-Me-Bad.git
 cd Whip-Me-Bad
 npm install
 npm start
