@@ -107,14 +107,13 @@ function createOverlay() {
 }
 
 // ── Trigger logic ───────────────────────────────────────────────────
-function triggerWhip() {
+function triggerWhip(label) {
   if (settings.paused) return;
   if (cooldown || !overlayReady) return;
   cooldown = true;
   setTimeout(() => { cooldown = false; }, COOLDOWN_MS);
-  // Send volume to overlay
   overlay.webContents.send('set-volume', settings.volume);
-  overlay.webContents.send('trigger-whip');
+  overlay.webContents.send('trigger-whip', label || '');
 }
 
 let enterTimer = null;
@@ -129,12 +128,12 @@ function triggerFromEnter() {
   }, 150);
 }
 
-function triggerFromHook(hookType) {
+function triggerFromHook(hookType, label) {
   if (enterTimer) {
     clearTimeout(enterTimer);
     enterTimer = null;
   }
-  triggerWhip();
+  triggerWhip(label);
   track(hookType || 'kiro_hook');
 }
 
@@ -739,10 +738,10 @@ function killStalePorts() {
 function startTriggerListeners() {
   const httpServer = http.createServer((req, res) => {
     if (req.url.startsWith('/whip')) {
-      // Parse trigger type from query: /whip?type=kiro_prompt
       const url = new URL(req.url, 'http://localhost');
       const hookType = url.searchParams.get('type') || 'kiro_hook';
-      triggerFromHook(hookType);
+      const label = url.searchParams.get('label') || '';
+      triggerFromHook(hookType, label);
       res.writeHead(200);
       res.end('OK');
     } else {

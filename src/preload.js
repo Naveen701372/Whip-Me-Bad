@@ -2,7 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('bridge', {
   // Overlay
-  onTriggerWhip: (fn) => ipcRenderer.on('trigger-whip', () => fn()),
+  onTriggerWhip: (fn) => ipcRenderer.on('trigger-whip', (_, label) => fn(label)),
   onWarmup: (fn) => ipcRenderer.on('warmup', () => fn()),
   onSetVolume: (fn) => ipcRenderer.on('set-volume', (_, vol) => fn(vol)),
   onSetSounds: (fn) => ipcRenderer.on('set-sounds', (_, paths) => fn(paths)),

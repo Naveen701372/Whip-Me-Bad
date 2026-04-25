@@ -8,7 +8,7 @@
   },
   "then": {
     "type": "runCommand",
-    "command": "node -e \"require('http').get('http://127.0.0.1:31338/whip?type=kiro_task').on('error',()=>{})\"",
+    "command": "node -e \"require('http').get('http://127.0.0.1:31338/whip?type=kiro_task&label=task+done').on('error',()=>{})\"",
     "timeout": 3
   }
 }

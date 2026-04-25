@@ -9,7 +9,7 @@
   },
   "then": {
     "type": "runCommand",
-    "command": "node -e \"require('http').get('http://127.0.0.1:31338/whip?type=kiro_tool').on('error',()=>{})\"",
+    "command": "node -e \"require('http').get('http://127.0.0.1:31338/whip?type=kiro_tool&label=touched+code').on('error',()=>{})\"",
     "timeout": 3
   }
 }

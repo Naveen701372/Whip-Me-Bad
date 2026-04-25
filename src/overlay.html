@@ -703,6 +703,7 @@ function showText(x, y) {
 
   textDisplay = {
     text: getPhrase(),
+    label: pendingLabel,
     x: textX, y: textY,
     life: 1,
     vy: -1.2,
@@ -713,6 +714,7 @@ function showText(x, y) {
     wobble: Math.random() * Math.PI * 2,
     tierScale: tierScale,
   };
+  pendingLabel = '';
 }
 
 function updateText() {
@@ -786,6 +788,16 @@ function drawText() {
   ctx.globalAlpha = fadeIn * fadeOut * 0.85;
   ctx.fillStyle = '#fff';
   ctx.fillText(t.text, 0, -1);
+
+  // Label subtitle — small text below the main phrase
+  if (t.label) {
+    ctx.globalAlpha = fadeIn * fadeOut * 0.5;
+    ctx.font = `500 ${Math.round(fontSize * 0.35)}px "Baloo 2", -apple-system, sans-serif`;
+    ctx.shadowColor = `hsla(${t.hue}, 60%, 50%, 0.4)`;
+    ctx.shadowBlur = 8;
+    ctx.fillStyle = `hsla(${t.hue}, 80%, 85%, 0.9)`;
+    ctx.fillText(t.label, 0, fontSize * 0.55);
+  }
 
   ctx.restore();
 }
@@ -962,8 +974,11 @@ window.bridge.onSetSounds((paths) => {
   initAudioPools();
 });
 
-window.bridge.onTriggerWhip(() => {
-  console.log('🎬 Overlay received trigger-whip — starting animation');
+let pendingLabel = '';
+
+window.bridge.onTriggerWhip((label) => {
+  console.log('🎬 Overlay received trigger-whip — label:', label);
+  pendingLabel = label || '';
   playWhooshSound();
   setTimeout(triggerAnimation, 250);
 });
