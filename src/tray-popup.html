@@ -196,9 +196,9 @@
     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
     Insights
   </button>
-  <button class="foot-btn" onclick="bridge.send('open-login')">
-    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
-    Login
+  <button class="foot-btn" id="loginBtn" onclick="toggleLogin()">
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+    <span id="loginLabel">Start at Login</span>
   </button>
   <button class="foot-btn danger" onclick="bridge.send('quit-app')">
     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
@@ -243,6 +243,10 @@ ipcRenderer.on('init-settings', (_, s) => {
   document.getElementById('whooshFile').textContent = truncate(s.customWhoosh, 16);
   document.getElementById('slapFile').textContent = truncate(s.customSlap, 16);
   document.getElementById('keyBadge').textContent = s.triggerKey || 'Enter';
+
+  // Login state
+  loginEnabled = s.openAtLogin || false;
+  updateLoginBtn();
 });
 
 function togglePause() {
@@ -259,6 +263,24 @@ function changeVolume(val) {
   document.getElementById('volVal').textContent = val + '%';
   currentSettings.volume = parseInt(val) / 100;
   ipcRenderer.send('set-volume-setting', parseInt(val) / 100);
+}
+
+let loginEnabled = false;
+function toggleLogin() {
+  ipcRenderer.send('open-login');
+  loginEnabled = !loginEnabled;
+  updateLoginBtn();
+}
+function updateLoginBtn() {
+  const btn = document.getElementById('loginBtn');
+  const label = document.getElementById('loginLabel');
+  if (loginEnabled) {
+    label.textContent = 'Startup: On';
+    btn.style.color = 'var(--accent-text)';
+  } else {
+    label.textContent = 'Start at Login';
+    btn.style.color = '';
+  }
 }
 
 function resetSounds() {

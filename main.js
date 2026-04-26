@@ -206,6 +206,7 @@ function showTrayPopup() {
       customSlap: settings.customSlap,
       triggerKey: settings.triggerKey,
       enterTrigger: settings.enterTrigger,
+      openAtLogin: app.getLoginItemSettings().openAtLogin,
     });
   });
 
