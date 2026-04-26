@@ -3,6 +3,16 @@
   "version": "1.1.0",
   "description": "Your AI just got a little spicier 🍑",
   "author": "Naveen <naveen@whipmebad.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/heynaavi/Whip-Me-Bad.git"
+  },
+  "homepage": "https://github.com/heynaavi/Whip-Me-Bad",
+  "keywords": ["whip", "ai", "kiro", "electron", "overlay", "animation", "developer-tools"],
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/"
+  },
   "main": "main.js",
   "bin": {
     "whip-me-bad": "bin/whip-me-bad.js"
