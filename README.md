@@ -13,12 +13,13 @@ A dreamy neon whip cracks across your screen every time you press Enter or your 
 ## Install + run
 
 ```bash
-# download the app
-# macOS: .dmg from releases
-# windows: .exe from releases
+npm install -g whip-me-bad
+whip-me-bad
 ```
 
-[→ Download latest release](https://github.com/heynaavi/Whip-Me-Bad/releases/latest)
+Or download the app:
+
+[→ Download latest release](https://github.com/heynaavi/Whip-Me-Bad/releases/latest) (macOS .dmg, Windows .exe)
 
 Or run from source:
 

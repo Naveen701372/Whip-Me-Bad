@@ -130,6 +130,8 @@ const TRIGGERS = {
   kiro_edit:       { icon: '✏️', label: 'Edit', color: 'rgba(236,72,153,.7)' },
   kiro_agent_stop: { icon: '🏁', label: 'Done', color: 'rgba(251,191,36,.7)' },
   kiro_hook:       { icon: '🔗', label: 'Hook', color: 'rgba(168,85,247,.7)' },
+  session_start:   { icon: '🚀', label: 'Session', color: 'rgba(100,200,200,.5)', hidden: true },
+  setting_change:  { icon: '⚙️', label: 'Setting', color: 'rgba(150,150,150,.5)', hidden: true },
 };
 
 function render(events) {
@@ -180,6 +182,8 @@ function render(events) {
     // Skip kiro triggers if user doesn't use kiro
     if (!hasKiro && type.startsWith('kiro_')) continue;
     const t = TRIGGERS[type] || { icon: '❓', label: type, color: 'rgba(255,200,150,.5)' };
+    // Skip hidden event types (session_start, setting_change)
+    if (t.hidden) continue;
     const pct = (count / maxCount * 100).toFixed(0);
     barsHTML += `
       <div class="bar-row">

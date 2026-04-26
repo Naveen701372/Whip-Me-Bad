@@ -4,6 +4,9 @@
   "description": "Your AI just got a little spicier 🍑",
   "author": "Naveen <naveen@whipmebad.com>",
   "main": "main.js",
+  "bin": {
+    "whip-me-bad": "bin/whip-me-bad.js"
+  },
   "scripts": {
     "start": "electron .",
     "dev": "electron .",
@@ -49,14 +52,18 @@
     },
     "win": {
       "target": [
-        "nsis"
+        "nsis",
+        "portable"
       ],
       "icon": "assets/icons/logo-256.png"
     },
     "nsis": {
-      "oneClick": true,
-      "perMachine": false,
-      "allowToChangeInstallationDirectory": false
+      "oneClick": false,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Whip Me Bad"
     },
     "files": [
       "main.js",

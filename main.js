@@ -7,7 +7,7 @@ const dgram = require('dgram');
 const http = require('http');
 const fs = require('fs');
 const { startAutoInstaller, stopAutoInstaller, installInDirectory } = require('./src/hook-installer');
-const { initAnalytics, stopAnalytics, track } = require('./src/analytics');
+const { initAnalytics, stopAnalytics, track, trackEvent } = require('./src/analytics');
 
 // ── Settings persistence ────────────────────────────────────────────
 let SETTINGS_PATH = '';
@@ -220,6 +220,7 @@ function showTrayPopup() {
 ipcMain.on('toggle-pause', () => {
   settings.paused = !settings.paused;
   saveSettings();
+  trackEvent('setting_change', { setting: 'pause', value: settings.paused });
 });
 
 ipcMain.on('set-volume-setting', (_, vol) => {
@@ -237,6 +238,7 @@ ipcMain.on('change-whoosh', async () => {
     settings.customWhoosh = result.filePaths[0];
     saveSettings();
     sendSoundPaths();
+    trackEvent('setting_change', { setting: 'whoosh_sound', value: 'custom' });
     if (trayPopup) trayPopup.webContents.send('init-settings', settings);
   }
 });
@@ -251,6 +253,7 @@ ipcMain.on('change-slap', async () => {
     settings.customSlap = result.filePaths[0];
     saveSettings();
     sendSoundPaths();
+    trackEvent('setting_change', { setting: 'slap_sound', value: 'custom' });
     if (trayPopup) trayPopup.webContents.send('init-settings', settings);
   }
 });
@@ -281,6 +284,7 @@ ipcMain.on('reset-sounds', () => {
   settings.customSlap = '';
   saveSettings();
   sendSoundPaths();
+  trackEvent('setting_change', { setting: 'sounds', value: 'reset' });
 });
 
 ipcMain.on('reset-one-sound', (_, type) => {
@@ -288,6 +292,7 @@ ipcMain.on('reset-one-sound', (_, type) => {
   else if (type === 'slap') settings.customSlap = '';
   saveSettings();
   sendSoundPaths();
+  trackEvent('setting_change', { setting: type + '_sound', value: 'reset' });
 });
 
 ipcMain.on('reset-trigger', () => {
@@ -296,6 +301,7 @@ ipcMain.on('reset-trigger', () => {
   settings.triggerVkCode = 13;
   settings.enterTrigger = true;
   saveSettings();
+  trackEvent('setting_change', { setting: 'trigger_key', value: 'reset' });
   if (keyMonitor) { keyMonitor.kill(); keyMonitor = null; }
   startKeyMonitor();
 });
@@ -699,6 +705,7 @@ ipcMain.on('key-captured', (_, data) => {
     settings.enterTrigger = true;
     saveSettings();
     updateTray();
+    trackEvent('setting_change', { setting: 'trigger_key', value: data.key });
     // Restart key monitor with new key
     if (keyMonitor) {
       keyMonitor.kill();

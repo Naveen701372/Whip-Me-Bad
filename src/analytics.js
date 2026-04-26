@@ -51,17 +51,48 @@ function saveQueue() {
   try { fs.writeFileSync(QUEUE_PATH, JSON.stringify(queue.slice(-MAX_QUEUE_SIZE))); } catch (_) {}
 }
 
-function track(triggerType) {
+function track(triggerType, meta) {
   totalSlaps++;
-  queue.push({
+  const event = {
     device_id: deviceId,
     session_id: sessionId,
     trigger_type: triggerType,
     total_slaps: totalSlaps,
     app_version: app.getVersion(),
     platform: process.platform,
+  };
+  if (meta) event.meta = JSON.stringify(meta);
+  queue.push(event);
+  if (queue.length > MAX_QUEUE_SIZE) queue = queue.slice(-MAX_QUEUE_SIZE);
+}
+
+function trackEvent(eventType, meta) {
+  queue.push({
+    device_id: deviceId,
+    session_id: sessionId,
+    trigger_type: eventType,
+    total_slaps: totalSlaps,
+    app_version: app.getVersion(),
+    platform: process.platform,
+    meta: meta ? JSON.stringify(meta) : null,
   });
   if (queue.length > MAX_QUEUE_SIZE) queue = queue.slice(-MAX_QUEUE_SIZE);
+}
+
+function detectKiro() {
+  const os = require('os');
+  const home = os.homedir();
+  // Check for Kiro installation indicators
+  const kiroIndicators = [
+    path.join(home, '.kiro'),
+    process.platform === 'darwin' ? '/Applications/Kiro.app' : '',
+    process.platform === 'win32' ? path.join(home, 'AppData', 'Local', 'Programs', 'kiro') : '',
+  ].filter(Boolean);
+
+  for (const p of kiroIndicators) {
+    try { if (fs.existsSync(p)) return true; } catch (_) {}
+  }
+  return false;
 }
 
 async function flush() {
@@ -116,6 +147,10 @@ function initAnalytics() {
   sessionId = uuid();
   loadQueue();
 
+  // Track session start with Kiro detection
+  const hasKiro = detectKiro();
+  trackEvent('session_start', { hasKiro, platform: process.platform });
+
   flushTimer = setInterval(() => flush().catch(() => {}), FLUSH_INTERVAL_MS);
   app.on('before-quit', () => { saveQueue(); flush().catch(() => {}); });
 }
@@ -129,4 +164,4 @@ function getStats() {
   return { totalSlaps, queueSize: queue.length, deviceId, sessionId };
 }
 
-module.exports = { initAnalytics, stopAnalytics, track, flush, getStats };
+module.exports = { initAnalytics, stopAnalytics, track, trackEvent, detectKiro, flush, getStats };
