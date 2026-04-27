@@ -9,7 +9,7 @@
     "url": "https://github.com/heynaavi/Whip-Me-Bad.git"
   },
   "homepage": "https://github.com/heynaavi/Whip-Me-Bad",
-  "keywords": ["whip", "ai", "kiro", "electron", "overlay", "animation", "developer-tools"],
+  "keywords": ["whip", "ai", "kiro", "cursor", "windsurf", "vscode", "electron", "overlay", "animation", "developer-tools", "fun", "productivity", "streak", "sound", "npm", "nodejs", "menubar", "hotkey"],
   "publishConfig": {
     "registry": "https://registry.npmjs.org/"
   },
