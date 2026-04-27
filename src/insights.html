@@ -150,7 +150,7 @@ function render(events) {
     return;
   }
 
-  const total = events.length;
+  const total = events.filter(e => !['session_start','setting_change'].includes(e.trigger_type)).length;
   const persona = getPersona(total);
 
   // Count by trigger type

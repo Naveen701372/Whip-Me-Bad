@@ -3,6 +3,7 @@ dist/
 build/icon.icns
 build/icon.ico
 graphify-out/
+portal/
 *.dmg
 *.exe
 *.AppImage

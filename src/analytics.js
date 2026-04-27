@@ -14,7 +14,8 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 let QUEUE_PATH = '';
 let DEVICE_PATH = '';
 
-const FLUSH_INTERVAL_MS = 60000;
+const EDGE_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/track-whip`;
+const FLUSH_INTERVAL_MS = 10000; // 10s for faster debugging
 const MAX_QUEUE_SIZE = 500;
 
 let queue = [];
@@ -98,11 +99,14 @@ function detectKiro() {
 async function flush() {
   if (queue.length === 0) return;
   const batch = queue.splice(0, 50);
+  console.log(`📊 Flushing ${batch.length} events via edge function...`);
 
   try {
-    await supabaseInsert(batch);
+    const result = await supabaseInsert(batch);
+    console.log(`📊 ✅ Flushed ${batch.length} events — region: ${result.region || 'n/a'}`);
     saveQueue();
-  } catch (_) {
+  } catch (err) {
+    console.log(`📊 ❌ Flush failed: ${err.message}`);
     queue.unshift(...batch);
     saveQueue();
   }
@@ -110,8 +114,13 @@ async function flush() {
 
 function supabaseInsert(rows) {
   return new Promise((resolve, reject) => {
-    const payload = JSON.stringify(rows);
-    const url = new URL(`${SUPABASE_URL}/rest/v1/whip_events`);
+    const cleanRows = rows.map(r => {
+      const clean = { ...r };
+      if (!clean.meta) delete clean.meta;
+      return clean;
+    });
+    const payload = JSON.stringify(cleanRows);
+    const url = new URL(EDGE_FUNCTION_URL);
 
     const req = https.request({
       hostname: url.hostname,
@@ -121,14 +130,20 @@ function supabaseInsert(rows) {
         'Content-Type': 'application/json',
         'apikey': SUPABASE_ANON_KEY,
         'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        'Prefer': 'return=minimal',
         'Content-Length': Buffer.byteLength(payload),
       },
-      timeout: 5000,
+      timeout: 8000,
     }, (res) => {
-      res.resume();
-      if (res.statusCode >= 200 && res.statusCode < 300) resolve();
-      else reject(new Error(`HTTP ${res.statusCode}`));
+      let body = '';
+      res.on('data', d => body += d);
+      res.on('end', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          try { resolve(JSON.parse(body)); } catch (_) { resolve({}); }
+        } else {
+          console.log(`📊 Edge fn response ${res.statusCode}: ${body}`);
+          reject(new Error(`HTTP ${res.statusCode}`));
+        }
+      });
     });
 
     req.on('error', reject);
