@@ -496,3 +496,215 @@ build/icon.ico
 - [ ] Test: `npm start`
 - [ ] Build: `npm run build:all`
 - [ ] Ship: tag → push → GitHub Release → npm publish
+
+---
+
+## 14. npm Packaging — Ship Without Electron
+
+The biggest lesson from Whip Me Bad: **don't make users install Electron via npm**. It's ~200MB, takes forever, and often fails. Instead, ship a tiny npm package that downloads the prebuilt binary at install time. This is the same pattern Playwright, Puppeteer, and the `electron` npm package itself use.
+
+### The Flow
+
+```
+npm install -g my-app
+```
+
+1. npm downloads your package (tiny — just JS, no electron)
+2. npm runs your `postinstall` script automatically
+3. Postinstall detects the OS (`process.platform`)
+4. Downloads the right prebuilt binary from GitHub Releases (.zip for mac, .exe for windows)
+5. Extracts it to `~/.my-app/`
+6. `bin/my-app.js` just launches that installed binary
+
+### File Structure
+
+```
+package.json          → "postinstall": "node scripts/postinstall.js"
+scripts/
+  postinstall.js      → thin wrapper that spawns install-binary.js
+  install-binary.js   → detects OS, downloads from GitHub Releases, extracts
+bin/
+  my-app.js           → launches ~/.my-app/My App.app (mac) or My App.exe (win)
+```
+
+### package.json Changes
+
+```json
+{
+  "main": "main.js",
+  "bin": { "my-app": "bin/my-app.js" },
+  "files": ["bin/", "scripts/", "README.md"],
+  "scripts": {
+    "postinstall": "node scripts/postinstall.js",
+    "start": "electron .",
+    "build:all": "electron-builder --mac --win"
+  }
+}
+```
+
+Key points:
+- `files` whitelist keeps the npm tarball tiny (ours is 6.4KB)
+- `main` field is still needed for electron-builder, but npm auto-includes it — strip it in CI before `npm publish` (see workflow below)
+- `electron` stays in `devDependencies` only — users never download it
+
+### Critical Lesson: npm Hides Postinstall Output
+
+npm v7+ **silences all lifecycle script output** (both stdout AND stderr). Your beautiful progress bar? Users see nothing.
+
+**The fix: write to `/dev/tty` directly.** This bypasses npm's pipe entirely.
+
+```js
+const fs = require('fs');
+
+let ttyFd = null;
+try {
+  const ttyPath = process.platform === 'win32' ? '\\\\.\\CON' : '/dev/tty';
+  ttyFd = fs.openSync(ttyPath, 'w');
+} catch (_) {}
+
+function out(msg) {
+  if (ttyFd !== null) {
+    fs.writeSync(ttyFd, msg + '\n');
+  } else {
+    process.stderr.write(msg + '\n');
+  }
+}
+```
+
+Falls back to stderr if `/dev/tty` isn't available (CI environments, piped output).
+
+### Progress Bar Tips
+
+- Use `\x1b[2K\r` before each update to clear the full line — prevents jitter from npm's own spinner
+- Update every 10% not every 5% — less flicker
+- Write a clean 100% bar on completion before the newline
+
+```js
+ttyWrite(`\x1b[2K\r  Downloading... ${progressBar(downloaded / size)}`);
+```
+
+### macOS: Use ZIP Not DMG
+
+`hdiutil` (DMG mounting) fails inside npm's postinstall process environment. Use `.zip` instead:
+
+```js
+// Build with: electron-builder --mac zip
+// Extract with:
+execSync(`unzip -o -q "${zipPath}" -d "${INSTALL_DIR}"`);
+```
+
+Also strip the quarantine attribute so Gatekeeper doesn't block it:
+```js
+execSync(`xattr -rd com.apple.quarantine "${appPath}" 2>/dev/null`);
+```
+
+`ditto -xk` also fails on electron-builder zips (strict about symlinks). Plain `unzip` works.
+
+### Windows: Use Portable EXE
+
+```js
+// Build with: electron-builder --win portable
+// Just copy the exe:
+fs.copyFileSync(downloadedExe, path.join(INSTALL_DIR, 'My App.exe'));
+```
+
+### Version Caching
+
+Write a `.version` file after install. Skip download if already at the right version:
+
+```js
+const versionFile = path.join(INSTALL_DIR, '.version');
+if (fs.existsSync(versionFile)) {
+  const installed = fs.readFileSync(versionFile, 'utf8').trim();
+  if (installed === VERSION && fs.existsSync(binaryPath)) {
+    // Already installed — skip
+    return;
+  }
+}
+// ... after successful install:
+fs.writeFileSync(versionFile, VERSION);
+```
+
+### Download Function: Flush Before Extract
+
+The write stream must be fully flushed before you try to unzip. Use the callback form:
+
+```js
+res.on('end', () => {
+  file.end(() => {    // ← wait for flush!
+    resolve();
+  });
+});
+```
+
+Without this, `unzip` sees a truncated file and fails with "End-of-central-directory signature not found".
+
+### bin/my-app.js — The Launcher
+
+```js
+#!/usr/bin/env node
+const { spawn } = require('child_process');
+const path = require('path');
+const os = require('os');
+
+const INSTALL_DIR = path.join(os.homedir(), '.my-app');
+
+if (process.platform === 'darwin') {
+  spawn('open', ['-a', path.join(INSTALL_DIR, 'My App.app')], { stdio: 'ignore', detached: true }).unref();
+} else {
+  spawn(path.join(INSTALL_DIR, 'My App.exe'), [], { stdio: 'ignore', detached: true }).unref();
+}
+```
+
+### CI Workflow: Publish Without OTP Issues
+
+```yaml
+name: Publish Package
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish-npm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+      - run: |
+          node -e "
+            const pkg = require('./package.json');
+            delete pkg.main;
+            require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2));
+          "
+          npm publish --ignore-scripts
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+```
+
+Key points:
+- `--ignore-scripts` prevents postinstall from running on the CI runner (it's Linux, no mac/win binary to download)
+- Strip `main` field before publish so `main.js` doesn't get included in the tarball
+- Use Node 22+ to avoid deprecation warnings
+- npm token must be a **Granular Access Token** (not classic) to bypass 2FA/OTP in CI
+
+### Graceful Failure
+
+Never let the postinstall crash `npm install`. Always catch errors and exit 0:
+
+```js
+main().catch(() => process.exit(0));
+```
+
+If download fails, show a manual download link and move on. The package still installs — the user just needs to grab the binary themselves.
+
+### GitHub Release Asset Naming
+
+GitHub converts spaces to dots in release asset names. Match your postinstall asset names to what GitHub actually serves:
+
+```
+Local build:  "Whip Me Bad-1.2.1-arm64-mac.zip"
+GitHub asset: "Whip.Me.Bad-1.2.1-arm64-mac.zip"  ← use this in your script
+```
