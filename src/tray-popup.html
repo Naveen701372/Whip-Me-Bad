@@ -353,6 +353,21 @@ function toggleAnalytics() {
   const enabled = sw.classList.toggle('on');
   ipcRenderer.send('set-analytics-consent', enabled);
 }
+
+// ── Konami code easter egg — ↑↑↓↓←→←→BA reopens onboarding ──
+const konamiSequence = ['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','b','a'];
+let konamiIndex = 0;
+document.addEventListener('keydown', (e) => {
+  if (e.key === konamiSequence[konamiIndex]) {
+    konamiIndex++;
+    if (konamiIndex === konamiSequence.length) {
+      konamiIndex = 0;
+      ipcRenderer.send('show-onboarding');
+    }
+  } else {
+    konamiIndex = 0;
+  }
+});
 </script>
 </body>
 </html>

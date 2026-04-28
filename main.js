@@ -187,7 +187,7 @@ function showTrayPopup() {
 
   const trayBounds = tray.getBounds();
   const popupWidth = 280;
-  const popupHeight = 360;
+  const popupHeight = 520;
 
   // Position below tray icon (macOS) or above (Windows)
   let x = Math.round(trayBounds.x + trayBounds.width / 2 - popupWidth / 2);
@@ -667,6 +667,11 @@ ipcMain.on('set-analytics-consent-from-onboarding', (_, enabled) => {
   settings.analyticsConsent = enabled;
   setAnalyticsEnabled(enabled);
   saveSettings();
+});
+
+ipcMain.on('show-onboarding', () => {
+  if (trayPopup) { trayPopup.close(); trayPopup = null; }
+  showOnboarding();
 });
 
 function startPostOnboarding() {

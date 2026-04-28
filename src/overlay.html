@@ -834,11 +834,13 @@ function triggerAnimation() {
 }
 
 function simplifiedWhip() {
-  const startPos = getHandlePos(0);
-  handleX = startPos.x;
-  handleY = startPos.y;
+  playCrackSound();
 
-  whip = spawnWhip(handleX, handleY);
+  const cx = W * 0.5;
+  const cy = H * 0.45;
+
+  // Show only the text — no whip physics, no particles, no artifacts
+  whip = null;
   phase = 'animating';
   animFrame = 0;
   cracked = true;
@@ -847,12 +849,23 @@ function simplifiedWhip() {
   dreamMotes = [];
   trailPoints = [];
   shakeIntensity = 0;
-  textDisplay = { text: pendingLabel || 'WHIP!', x: handleX + 200, y: handleY - 100, alpha: 1, scale: 1 };
+
+  pendingLabel = pendingLabel || '';
+  showText(cx, cy);
   dropTimer = 0;
+
+  // Brief flash to give feedback
+  flashEl.style.background = 'radial-gradient(circle, hsla(30, 80%, 85%, 0.4), transparent 70%)';
+  flashEl.style.opacity = '1';
+  setTimeout(() => { flashEl.style.opacity = '0'; }, 120);
 
   setTimeout(() => {
     phase = 'done';
-    setTimeout(() => { phase = 'idle'; }, 500);
+    ctx.clearRect(0, 0, W, H);
+    setTimeout(() => {
+      phase = 'idle';
+      if (warmedUp) window.bridge.whipDone();
+    }, 500);
   }, 800);
 }
 
@@ -964,11 +977,7 @@ loop();
 
 window.bridge.onWarmup(() => {
   if (reducedMotion) {
-    simplifiedWhip();
-    for (let i = 0; i < 20; i++) {
-      update();
-      draw();
-    }
+    // Minimal warmup — just prime audio, no visual cycle needed
     phase = 'idle';
     whip = null;
     textDisplay = null;
